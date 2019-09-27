@@ -1,0 +1,20 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+psycopg2 = "*"
+pyyaml = "*"
+startin = "*"
+matplotlib = "*"
+tin = {editable = true,path = "."}
+fiona = "*"
+shapely = "*"
+pytest = "*"
+click = "*"
+
+[requires]
+python_version = "3.6"

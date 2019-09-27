@@ -1,0 +1,10 @@
+.eggs
+.pytest_cache
+tin.egg-info
+.directory
+.idea
+
+Pipfile.lock
+
+# tests
+tests/data/test_out.obj

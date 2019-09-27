@@ -1,0 +1,16 @@
+database:
+    dbname: tin_test
+    host: localhost
+    port: 5432
+    user: someuser
+    password:
+
+tin_schema:
+    schema: tin
+    table: tin
+    field:
+        id: vid
+        geom: geom
+        star: star
+
+epsg: 7415
