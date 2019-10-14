@@ -26,5 +26,5 @@ class TestExporter:
         assert len(list(coordinates)) > 0
 
     def test_export_obj(self, tin_db, tin_schema, outfile):
-        obj = formats.OBJ(conn=tin_db, schema=tin_schema)
+        obj = formats.OBJDb(conn=tin_db, schema=tin_schema)
         obj.export(outfile)

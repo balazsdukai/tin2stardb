@@ -7,7 +7,7 @@ import pytest
 import logging
 from itertools import chain
 
-from tin import formats
+from tin import formats, utils
 
 log = logging.getLogger(__name__)
 
@@ -23,8 +23,8 @@ class TestOBJ:
         """Check if there are duplicate points in the input file"""
         infile = data_dir / 'obj' / '37fz2_9.obj'
         # infile = '/home/balazs/Development/TIN_scale_up/37fz2_8.obj'
-        obj = formats.OBJ(conn=tin_db, schema=tin_schema)
-        vertices, adjacency_table = obj._parse_obj(infile)
+        obj = formats.OBJDb(conn=tin_db, schema=tin_schema)
+        vertices, adjacency_table = obj.parse_obj(infile)
         coordinate_hash = {}
         for center, star in adjacency_table.items():
             # if center == 67:
@@ -39,17 +39,17 @@ class TestOBJ:
 
     def test_parse_obj(self, tin_db, tin_schema, data_dir):
         infile = data_dir / 'obj' / '37fz2_9.obj'
-        obj = formats.OBJ(conn=tin_db, schema=tin_schema)
-        vertices, adjacency_table = obj._parse_obj(infile)
+        obj = formats.OBJDb(conn=tin_db, schema=tin_schema)
+        vertices, adjacency_table = obj.parse_obj(infile)
         for center, star in adjacency_table.items():
             # check for duplicates in the star
             assert len(star) == len(set(star))
 
     def test_sort_ccw(self, tin_db, tin_schema, infile, data_dir):
         infile = data_dir / 'obj' / '37fz2_9.obj'
-        obj = formats.OBJ(conn=tin_db, schema=tin_schema)
-        vertices, adjacency_table = obj._parse_obj(infile)
-        stars = obj._sort_ccw(vertices, adjacency_table)
+        obj = formats.OBJDb(conn=tin_db, schema=tin_schema)
+        vertices, adjacency_table = obj.parse_obj(infile)
+        stars = utils.sort_ccw(vertices, adjacency_table)
         for vid, star in stars:
             # check for duplicates in the star
             assert len(star) == len(set(star))
@@ -58,7 +58,7 @@ class TestOBJ:
         infile = data_dir / 'obj' / '37fz2_9.obj'
         bbox = (96364.2115377, 439370.11094742,
                 96939.83980984, 440030.90870881)
-        obj = formats.OBJ(conn=tin_db, schema=tin_schema)
-        vertices, adjacency_table = obj._parse_obj(infile, bbox=bbox)
+        obj = formats.OBJDb(conn=tin_db, schema=tin_schema)
+        vertices, adjacency_table = obj.parse_obj(infile, bbox=bbox)
         assert set(adjacency_table.keys()) == set(chain(*adjacency_table.values()))
         assert set(range(1, len(vertices))) == set(adjacency_table.keys())

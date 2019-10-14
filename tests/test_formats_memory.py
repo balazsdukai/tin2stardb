@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Tests the formats_memory module."""
+"""Tests the in-memory classes from the formats module."""
 
 import pytest
 import logging
 from pathlib import Path
 
-from tin import formats_memory
+from tin import formats
 
 log = logging.getLogger(__name__)
 
@@ -21,15 +21,15 @@ def infile(data_dir, request):
 class TestOBJ:
     def test_parse_obj(self, data_dir):
         infile = data_dir / 'obj' / '37fz2_9.obj'
-        obj = formats_memory.factory_memory.create('obj')
-        points, adjacency_table = obj._parse_obj(infile)
+        obj = formats.factory.create('objmem')
+        points, adjacency_table = obj.parse_obj(infile)
         for center, link in adjacency_table.items():
             # check for duplicates in the link
             assert len(link) == len(set(link))
 
     def test_read(self, data_dir):
         infile = data_dir / 'obj' / '37fz2_9.obj'
-        obj = formats_memory.factory_memory.create('obj')
+        obj = formats.factory.create('objmem')
         obj.read(infile)
         for center, link in obj.stars:
             # check for duplicates in the link
@@ -37,6 +37,6 @@ class TestOBJ:
 
     def test_write(self, data_dir):
         infile = data_dir / 'obj' / '37fz2_9.obj'
-        obj = formats_memory.factory_memory.create('obj')
+        obj = formats.factory.create('objmem')
         obj.read(infile)
         obj.write(Path('/tmp/tin_test.obj'))

@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Tuple
 
-from tin.star import StarDb
+from tin.star import Star, StarDb
 from tin import utils
 
 log = logging.getLogger(__name__)
@@ -40,37 +40,10 @@ class FormatFactory:
         return formatter(**kwargs)
 
 
-class OBJ(StarDb):
-
-    def insert(self, path, epsg, bbox):
-        """Insert an OBJ into a Star-structure in the database.
-
-        :param path:
-        :param epsg:
-        :param bbox:
-        """
-        vertices, adjacency_table = self._parse_obj(path, bbox=bbox)
-        stars = self._sort_ccw(vertices, adjacency_table)
-        insert_gen = self._insert_generator(vertices, stars, epsg)
-        self._insert_query(insert_gen)
-
-    def export(self, path: Path):
-        """Export to Wavefront OBJ.
-
-        :param path: :py:class:Path to the output file
-        """
-        with path.open(mode='w') as fo:
-            log.info(f"Writing {path}")
-            fo.write('# Converted from Star TIN structure to OBJ.\n')
-            fo.write('# Tool written by Balázs Dukai, b.dukai@tudelft.nl\n')
-            for resultset in self.points():
-                for vtx in resultset:
-                    fo.write('v %s %s %s\n' % vtx)
-            for tri in self.triangles():
-                fo.write('f %s %s %s\n' % tri)
+class OBJ(object):
 
     @staticmethod
-    def _parse_obj(path: str, bbox: Tuple = None):
+    def parse_obj(path: str, bbox: Tuple = None):
         """Import from Wavefront OBJ.
 
         Returns a list of vertices and an adjacency table. The adjacency table
@@ -134,5 +107,63 @@ class OBJ(StarDb):
         return new_vertices, adjacency_table
 
 
+class OBJMem(OBJ, Star):
+
+    def read(self, path, bbox=None):
+        """Read an OBJ into a Star-structure in memory.
+
+        :param path:
+        :param bbox:
+        """
+        self.points, adjacency_table = self.parse_obj(path, bbox=bbox)
+        self.stars = utils.sort_ccw(self.points, adjacency_table)
+
+    def write(self, path: Path):
+        """Write to Wavefront OBJ.
+
+        :param path: :py:class:Path to the output file
+        """
+        with path.open(mode='w') as fo:
+            log.info(f"Writing {path}")
+            fo.write('# Converted from Star TIN structure to OBJ.\n')
+            fo.write('# Tool written by Balázs Dukai, b.dukai@tudelft.nl\n')
+            # The first element in self.points is None, to fake a 1-based index
+            for point in self.points[1:]:
+                fo.write('v %s %s %s\n' % point)
+            for tri in self.triangles():
+                fo.write('f %s %s %s\n' % tri)
+
+
+class OBJDb(OBJ, StarDb):
+
+    def insert(self, path, epsg, bbox):
+        """Insert an OBJ into a Star-structure in the database.
+
+        :param path:
+        :param epsg:
+        :param bbox:
+        """
+        vertices, adjacency_table = self.parse_obj(path, bbox=bbox)
+        stars = utils.sort_ccw(vertices, adjacency_table)
+        insert_gen = self._insert_generator(vertices, stars, epsg)
+        self._insert_query(insert_gen)
+
+    def export(self, path: Path):
+        """Export to Wavefront OBJ.
+
+        :param path: :py:class:Path to the output file
+        """
+        with path.open(mode='w') as fo:
+            log.info(f"Writing {path}")
+            fo.write('# Converted from Star TIN structure to OBJ.\n')
+            fo.write('# Tool written by Balázs Dukai, b.dukai@tudelft.nl\n')
+            for resultset in self.points():
+                for vtx in resultset:
+                    fo.write('v %s %s %s\n' % vtx)
+            for tri in self.triangles():
+                fo.write('f %s %s %s\n' % tri)
+
+
 factory = FormatFactory()
-factory.register_formatter('obj', OBJ)
+factory.register_formatter('objdb', OBJDb)
+factory.register_formatter('objmem', OBJMem)

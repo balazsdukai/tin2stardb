@@ -11,7 +11,7 @@ import json
 import yaml
 import click
 
-from tin import schema, db, formats, formats_memory, utils
+from tin import schema, db, formats, utils
 
 
 def parse_config(config):
@@ -84,7 +84,11 @@ def import_cmd(ctx, filename, bbox, bboxes):
         schema.create_relations(conn, tin_schema, ctx.obj['cfg']['epsg'])
         if path.is_file():
             # path.suffix returns '.obj' from some/path/file.obj
-            fmt = path.suffix.lower().split('.')[1] # suffix without leading dot
+            f = path.suffix.lower().split('.')[1] # suffix without leading dot
+            if f == 'obj':
+                fmt = 'objmem'
+            else:
+                raise click.exceptions.BadParameter(f"Unsupported format {f}")
             formatter = formats.factory.create(fmt, conn=conn,
                                                schema=tin_schema)
             formatter.insert(path, ctx.obj['cfg']['epsg'], bbox=bbox)
@@ -195,8 +199,12 @@ def subset_cmd(ctx, infile, outfile, bbox, bboxes):
     try:
         if path.is_file():
             # path.suffix returns '.obj' from some/path/file.obj
-            fmt = path.suffix.lower().split('.')[1] # suffix without leading dot
-            formatter = formats_memory.factory_memory.create(fmt)
+            f = path.suffix.lower().split('.')[1] # suffix without leading dot
+            if f == 'obj':
+                fmt = 'objmem'
+            else:
+                raise click.exceptions.BadParameter(f"Unsupported format {f}")
+            formatter = formats.factory.create(fmt)
             formatter.read(path, bbox=bbox)
             formatter.write(outpath)
         elif path.is_dir():
@@ -213,8 +221,12 @@ def subset_cmd(ctx, infile, outfile, bbox, bboxes):
                                            f" to import. Please use only "
                                            f"a single format in a directory.")
             suffix = suffixes.pop()
-            fmt = suffix.lower().split('.')[1]
-            formatter = formats_memory.factory_memory.create(fmt)
+            f = suffix.lower().split('.')[1]
+            if f == 'obj':
+                fmt = 'objmem'
+            else:
+                raise click.exceptions.BadParameter(f"Unsupported format {f}")
+            formatter = formats.factory.create(fmt)
             geojson = json.load(bboxes) if bboxes else None
             for file_path in files:
                 tile = file_path.stem
