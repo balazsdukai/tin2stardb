@@ -17,7 +17,7 @@ from shapely.geometry import shape, Polygon
 log = logging.getLogger(__name__)
 
 
-class Star:
+class Star(object):
     """Main class for operating on a Star-TIN structure in memory."""
 
     def __init__(self, points=None, stars=None):
@@ -38,7 +38,10 @@ class Star:
             yield center, [rev_lookup[co] for co in ccw]
 
     def triangles(self):
-        """Generate triangles from the stars."""
+        """Generate triangles from the stars.
+
+        :returns: A generator over the triangles
+        """
         for vtx,link in self.stars:
             # To avoid duplicate triangles:
             # If the vertex ID is smaller than the current neighbor in the link,
@@ -51,7 +54,7 @@ class Star:
                     yield (vtx, link[pt-1], link[pt])
 
 
-class StarDb:
+class StarDb(Star):
     """Main class for operating on a Star-TIN structure in a database."""
 
     def __init__(self, conn, schema):
@@ -65,19 +68,6 @@ class StarDb:
     def export(self, output):
         """To be overwritten by format-specific exporters."""
         pass
-
-    def _sort_ccw(self, vertices, adjacency_table):
-        """Sort vertices in counter-clockwise order."""
-        log.info("Sorting adjacent vertices in stars in CCW-order")
-        x, y, z = [0, 1, 2]
-        for center, adjacent in adjacency_table.items():
-            localized = [(vertices[v][x] - vertices[center][x],
-                          vertices[v][y] - vertices[center][y]) for v in
-                         adjacent]
-            rev_lookup = {localized[i]: a for i, a in enumerate(adjacent)}
-            # sort vertices in counter-clockwise order around the center
-            ccw = sorted(localized, key=lambda p: math.atan2(p[1], p[0]))
-            yield center, [rev_lookup[co] for co in ccw]
 
     def _max_vid(self):
         """Get the largest vertex ID from the TIN table."""
@@ -146,7 +136,6 @@ class StarDb:
                 raise e
 
     def triangles(self):
-        """Generate triangles from the stars."""
         query_params = {
             'id': self.schema.field.id.sqlid,
             'star': self.schema.field.star.sqlid,
@@ -167,7 +156,6 @@ class StarDb:
                     yield (vtx, star[pt-1], star[pt])
 
     def points(self):
-        """Get the points."""
         query_params = {
             'id': self.schema.field.id.sqlid,
             'geom': self.schema.field.geom.sqlid,
