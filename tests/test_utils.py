@@ -28,3 +28,16 @@ class TestBBOX:
     ])
     def test_bbox(self, polygon, bbox):
         assert utils.bbox(polygon) == bbox
+
+class TestSide:
+    @pytest.mark.parametrize('poly, result', [
+        [[(0.9, 0.5), (1.6, 0.5), (1.6, 0.9), (0.9, 0.9)],
+         ('E', ((0.9, 0.5), (0.9, 0.9)))],
+        [[(0.9, 0.9), (0.9, 1.6), (0.5, 1.6), (0.5, 0.9)],
+         ('N', ((0.9, 0.9), (0.5, 0.9)))],
+    ])
+    def test_find_side(self, poly, result):
+        base = [(0.5, 0.5), (0.9, 0.5), (0.9, 0.9), (0.5, 0.9)]
+        side, segment = utils.find_side(base, poly)
+        assert side == result[0]
+        assert segment == result[1]

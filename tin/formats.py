@@ -6,6 +6,7 @@ import re
 import logging
 from pathlib import Path
 from typing import Tuple
+from math import isclose
 
 from tin.star import Star, StarDb
 from tin import utils
@@ -132,6 +133,12 @@ class OBJMem(OBJ, Star):
                 fo.write('v %s %s %s\n' % point)
             for tri in self.triangles():
                 fo.write('f %s %s %s\n' % tri)
+
+
+    def merge(self, neighbor):
+        """Merge a TIN into the current one."""
+        side, segment = utils.find_side(self.points, neighbor.points)
+
 
 
 class OBJDb(OBJ, StarDb):

@@ -246,12 +246,30 @@ def subset_cmd(ctx, infile, outfile, bbox, bboxes):
                 formatter.read(file_path, bbox=bbox)
                 formatter.write(outpath / file_path.name)
         else:
-            raise FileNotFoundError(path)
+            raise click.exceptions.FileError(str(path))
     except Exception as e:
         raise
+
+
+@click.command('merge')
+@click.argument('infiles', nargs=2)
+@click.argument('outfile', type=str)
+@click.pass_context
+def merge_cmd(ctx, infiles, outfile):
+    """Merge two TINs in OBJ format."""
+    inpaths = []
+    for inf in infiles:
+        p = Path(inf).resolve()
+        if p.is_file():
+            inpaths.append(p)
+        else:
+            raise click.exceptions.FileError(f"{str(p)} is not a file")
+    outpath = Path(outfile).resolve()
+    log = ctx.obj['log']
 
 
 main.add_command(import_cmd)
 main.add_command(export_cmd)
 main.add_command(delete_cmd)
 main.add_command(subset_cmd)
+main.add_command(merge_cmd)
