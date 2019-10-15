@@ -40,3 +40,17 @@ class TestOBJ:
         obj = formats.factory.create('objmem')
         obj.read(infile)
         obj.write(Path('/tmp/tin_test.obj'))
+
+    def test_merge(self, data_dir):
+        base = data_dir / 'obj' / '37fz2_8.obj'
+        neighbor = data_dir / 'obj' / '37fz2_9.obj'
+        obj_base = formats.factory.create('objmem')
+        obj_neighbor = formats.factory.create('objmem')
+        obj_base.read(base)
+        obj_neighbor.read(neighbor)
+        base_pts = len(obj_base.points)
+        base_stars = max(obj_base.stars)
+        obj_base.merge(obj_neighbor)
+        assert base_pts + len(obj_neighbor.points) - 1 == len(obj_base.points)
+        assert len(obj_base.points) - 1 == max(obj_base.stars)
+        assert base_stars + max(obj_neighbor.stars) == max(obj_base.stars)

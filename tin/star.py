@@ -4,7 +4,7 @@
 
 import logging
 import re
-from typing import Tuple
+from typing import List, Tuple, Mapping
 
 from psycopg2 import extras, errors
 import fiona
@@ -19,7 +19,8 @@ log = logging.getLogger(__name__)
 class Star(object):
     """Main class for operating on a Star-TIN structure in memory."""
 
-    def __init__(self, points=None, stars=None):
+    def __init__(self, points: List[Tuple[float]] = None,
+                 stars: Mapping[int, Tuple[int]] = None):
         self.stars = stars
         self.points = points
 

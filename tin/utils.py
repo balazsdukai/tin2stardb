@@ -4,7 +4,7 @@
 
 import math
 from statistics import mean
-from typing import Tuple
+from typing import Tuple, Union, Iterable
 import logging
 
 MODULE_MATPLOTLIB_AVAILABLE = True
@@ -68,7 +68,7 @@ def in_bbox(tri: Tuple, bbox: Tuple) -> bool:
     return any((within, on_south_bdry, on_west_bdry))
 
 
-def bbox(polygon) -> Tuple:
+def bbox(polygon) -> Tuple[float, float, float, float]:
     """Compute the Bounding Box of a polygon.
 
     :param polygon: List of coordinate pairs (x,y)
@@ -96,30 +96,39 @@ def get_polygon(feature):
         return feature['geometry']['coordinates'][0]
 
 
-def find_side(polygon, neighbor) -> Tuple:
+def find_side(polygon: Iterable[Tuple[float, ...]],
+              neighbor: Iterable[Tuple[float, ...]],
+              abs_tol: float = 0.0) ->\
+        Union[Tuple[None, None],
+              Tuple[str, Tuple[Tuple[float, float], Tuple[float, float]]]]:
     """Determines on which side does the neighbor polygon is located.
 
-    Assumes touching BBOXes of equal dimensions.
+    .. warning::
+
+        Assumes touching BBOXes of equal dimensions.
 
     :param polygon: The base polygon. A list of coordinate tuples.
     :param neighbor: The neighbor polygon.
+    :param abs_tol: Absolute coordinate tolerance. Passed on to `:math.isclose`
     :returns: One of ['E', 'N', 'W', 'S'], the touching line segment
     """
     minx, miny, maxx, maxy = 0,1,2,3
     bbox_base = bbox(polygon)
     bbox_nbr = bbox(neighbor)
-    if math.isclose(bbox_nbr[minx], bbox_base[maxx]) \
-        and math.isclose(bbox_nbr[miny], bbox_base[miny]):
+    if math.isclose(bbox_nbr[minx], bbox_base[maxx], abs_tol=abs_tol) \
+        and math.isclose(bbox_nbr[miny], bbox_base[miny], abs_tol=abs_tol):
         return 'E', ((bbox_base[maxx], bbox_base[miny]), (bbox_base[maxx], bbox_base[maxy]))
-    elif math.isclose(bbox_nbr[minx], bbox_base[minx]) \
-        and math.isclose(bbox_nbr[miny], bbox_base[maxy]):
+    elif math.isclose(bbox_nbr[minx], bbox_base[minx], abs_tol=abs_tol) \
+        and math.isclose(bbox_nbr[miny], bbox_base[maxy], abs_tol=abs_tol):
         return 'N', ((bbox_base[maxx], bbox_base[maxy]), (bbox_base[minx], bbox_base[maxy]))
-    elif math.isclose(bbox_nbr[maxx], bbox_base[minx]) \
-        and math.isclose(bbox_nbr[maxy], bbox_base[maxy]):
+    elif math.isclose(bbox_nbr[maxx], bbox_base[minx], abs_tol=abs_tol) \
+        and math.isclose(bbox_nbr[maxy], bbox_base[maxy], abs_tol=abs_tol):
         return 'W', ((bbox_base[minx], bbox_base[maxy]), (bbox_base[minx], bbox_base[miny]), )
-    elif math.isclose(bbox_nbr[maxx], bbox_base[maxx]) \
-        and math.isclose(bbox_nbr[maxy], bbox_base[miny]):
+    elif math.isclose(bbox_nbr[maxx], bbox_base[maxx], abs_tol=abs_tol) \
+        and math.isclose(bbox_nbr[maxy], bbox_base[miny], abs_tol=abs_tol):
         return 'S', ((bbox_base[minx], bbox_base[miny]), (bbox_base[maxx], bbox_base[miny]), )
+    else:
+        return None,None
 
 
 def plot_star(vid, stars, vertices):

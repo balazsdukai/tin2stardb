@@ -34,10 +34,16 @@ class TestSide:
         [[(0.9, 0.5), (1.6, 0.5), (1.6, 0.9), (0.9, 0.9)],
          ('E', ((0.9, 0.5), (0.9, 0.9)))],
         [[(0.9, 0.9), (0.9, 1.6), (0.5, 1.6), (0.5, 0.9)],
-         ('N', ((0.9, 0.9), (0.5, 0.9)))],
+         ('N', ((0.9, 0.9), (0.5, 0.9)))]
     ])
     def test_find_side(self, poly, result):
         base = [(0.5, 0.5), (0.9, 0.5), (0.9, 0.9), (0.5, 0.9)]
         side, segment = utils.find_side(base, poly)
         assert side == result[0]
         assert segment == result[1]
+
+    def test_find_side_rd(self):
+        base = [(96123.0, 440270.0), (97246.0, 440270.0), (97246.0, 441430.0), (96123.0, 441430.0)]
+        neighbor = [(96123.0, 439110.0), (97246.0, 439110.0), (97246.0, 440269.969), (96123.0, 440269.969)]
+        side, segment = utils.find_side(base, neighbor, abs_tol=0.1)
+        assert side == 'S'

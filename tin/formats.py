@@ -2,11 +2,11 @@
 
 """File format handlers for in-database TIN storage."""
 
+from __future__ import annotations
 import re
 import logging
 from pathlib import Path
 from typing import Tuple
-from math import isclose
 
 from tin.star import Star, StarDb
 from tin import utils
@@ -44,7 +44,7 @@ class FormatFactory:
 class OBJ(object):
 
     @staticmethod
-    def parse_obj(path: str, bbox: Tuple = None):
+    def parse_obj(path: str, bbox: Tuple[float] = None):
         """Import from Wavefront OBJ.
 
         Returns a list of vertices and an adjacency table. The adjacency table
@@ -110,16 +110,16 @@ class OBJ(object):
 
 class OBJMem(OBJ, Star):
 
-    def read(self, path, bbox=None):
+    def read(self, path: str, bbox: Tuple[float] = None) -> None:
         """Read an OBJ into a Star-structure in memory.
 
         :param path:
         :param bbox:
         """
         self.points, adjacency_table = self.parse_obj(path, bbox=bbox)
-        self.stars = utils.sort_ccw(self.points, adjacency_table)
+        self.stars = dict(utils.sort_ccw(self.points, adjacency_table))
 
-    def write(self, path: Path):
+    def write(self, path: Path) -> None:
         """Write to Wavefront OBJ.
 
         :param path: :py:class:Path to the output file
@@ -135,21 +135,24 @@ class OBJMem(OBJ, Star):
                 fo.write('f %s %s %s\n' % tri)
 
 
-    def merge(self, neighbor):
+    def merge(self, neighbor: OBJMem) -> None:
         """Merge a TIN into the current one."""
-        side, segment = utils.find_side(self.points, neighbor.points)
+        side, segment = utils.find_side(self.points[1:],
+                                        neighbor.points[1:], abs_tol=0.1)
+        maxid = max(self.stars)
+        self.points += neighbor.points[1:] # because OBJ has 1-based indexing so the first value is None
+        stars_nbr = ((star+maxid, [v+maxid for v in link])
+                     for star, link in neighbor.stars.items())
+        self.stars.update(stars_nbr)
+
+
 
 
 
 class OBJDb(OBJ, StarDb):
 
     def insert(self, path, epsg, bbox):
-        """Insert an OBJ into a Star-structure in the database.
-
-        :param path:
-        :param epsg:
-        :param bbox:
-        """
+        """Insert an OBJ into a Star-structure in the database."""
         vertices, adjacency_table = self.parse_obj(path, bbox=bbox)
         stars = utils.sort_ccw(vertices, adjacency_table)
         insert_gen = self._insert_generator(vertices, stars, epsg)
