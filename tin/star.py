@@ -165,6 +165,22 @@ class Star(object):
             #print('tr', tr[0], tr[1], tr[2])
         return trail
 
+    def sew(self):
+        """Sew two TINs into a topologically valid TIN by traversing along a
+        straight line that is the where the two TINs touch.
+
+        The algorithm is an adaptation of the 'straight walk' algorithm. As
+        input it requires a *single TIN* and a *line segment*. The single TIN is
+        is a combination of two TINs by combining their points into a single
+        array and reindexing the vertices of the second. The line segment is
+        the line along which the two TINs touch.
+
+        The algorithm progresses along the *line segment* and removes the
+        duplicate vertices, by replacing the vertex from the second TIN with
+        one from the first TIN in the triangle stars, thereby creating a
+        topologically connected TIN.
+        """
+
 
 class StarDb(object):
     """Main class for operating on a Star-TIN structure in a database."""

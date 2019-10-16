@@ -12,7 +12,7 @@ from tin import formats
 log = logging.getLogger(__name__)
 
 
-@pytest.fixture('module', params=['37fz2_8.obj', '37fz2_9.obj',
+@pytest.fixture(scope='module', params=['37fz2_8.obj', '37fz2_9.obj',
                                   '37fz2_13.obj', '37fz2_14.obj'])
 def infile(data_dir, request):
     yield data_dir / 'obj' / request.param
@@ -61,12 +61,19 @@ class TestOBJMem:
         obj = formats.factory.create('objmem')
         obj.read(infile)
         tri = obj.pointlocation(point)
-        log.info(tri)
+        print(tri)
 
     def test_straightwalk(self, data_dir):
         line = [(97246.0, 441430.0), (96123.0, 441430.0)]
         infile = data_dir / 'obj' / '37fz2_8.obj'
+        infile_2 = data_dir / 'obj' / '37fz2_9.obj'
         obj = formats.factory.create('objmem')
         obj.read(infile)
+        obj_2 = formats.factory.create('objmem')
+        obj_2.read(infile_2)
         triangles = obj.straight_walk(*line)
-        log.info(triangles)
+        print(triangles)
+        obj.merge(obj_2)
+        triangles_2 = obj.straight_walk(*line)
+        print(triangles)
+        assert triangles == triangles_2
