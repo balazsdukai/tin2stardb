@@ -18,7 +18,7 @@ def infile(data_dir, request):
     yield data_dir / 'obj' / request.param
 
 
-class TestOBJ:
+class TestOBJMem:
     def test_parse_obj(self, data_dir):
         infile = data_dir / 'obj' / '37fz2_9.obj'
         obj = formats.factory.create('objmem')
@@ -54,3 +54,19 @@ class TestOBJ:
         assert base_pts + len(obj_neighbor.points) - 1 == len(obj_base.points)
         assert len(obj_base.points) - 1 == max(obj_base.stars)
         assert base_stars + max(obj_neighbor.stars) == max(obj_base.stars)
+
+    def test_pointlocation(self, data_dir):
+        infile = data_dir / 'obj' / '37fz2_9.obj'
+        point = (96660.198,439771.976)
+        obj = formats.factory.create('objmem')
+        obj.read(infile)
+        tri = obj.pointlocation(point)
+        log.info(tri)
+
+    def test_straightwalk(self, data_dir):
+        line = [(97246.0, 441430.0), (96123.0, 441430.0)]
+        infile = data_dir / 'obj' / '37fz2_8.obj'
+        obj = formats.factory.create('objmem')
+        obj.read(infile)
+        triangles = obj.straight_walk(*line)
+        log.info(triangles)

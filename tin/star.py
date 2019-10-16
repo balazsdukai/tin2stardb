@@ -2,8 +2,10 @@
 
 """Main class for the Star TIN structure."""
 
+from __future__ import annotations
 import logging
 import re
+import random
 from typing import List, Tuple, Mapping
 
 from psycopg2 import extras, errors
@@ -12,6 +14,7 @@ from psycopg2 import sql
 from shapely import geos
 from shapely.geometry import shape, Polygon
 
+from tin import utils
 
 log = logging.getLogger(__name__)
 
@@ -19,8 +22,8 @@ log = logging.getLogger(__name__)
 class Star(object):
     """Main class for operating on a Star-TIN structure in memory."""
 
-    def __init__(self, points: List[Tuple[float]] = None,
-                 stars: Mapping[int, Tuple[int]] = None):
+    def __init__(self, points: List[Tuple[float, float, float]] = None,
+                 stars: Mapping[int, Tuple[int, ...]] = None):
         self.stars = stars
         self.points = points
 
@@ -39,6 +42,118 @@ class Star(object):
                     pass
                 else:
                     yield (vtx, link[pt-1], link[pt])
+
+    def pointlocation(self, point: Tuple[float, float]) -> Tuple[int, int, int]:
+        """Return the triangle in which the given point is located
+
+        :param point: The point in question, given as (x,y) coordinates
+        :return: The triangle in which the point is located
+        """
+        # -- find closest starting point
+        n = 5
+        mindist = 1e99
+        closeid = 1
+        for i in range(n):
+            rid = random.randint(1, max(self.stars))
+            temp = self.points[rid]
+            tempdist = utils.distance(point, temp)
+            if tempdist < mindist:
+                mindist = tempdist
+                closeid = rid
+        # print('closest point is:', closeid)
+        # -- find first triangle
+        rv = closeid
+        lk = self.stars[closeid]
+        for i in range(len(lk)):
+            rv1 = lk[i]
+            if utils.orientation(self.points[rv], self.points[rv1], point) == -1:
+                # -- find previous in star of closeid
+                ii = lk.index(rv1)
+                if ii == 0:
+                    other = lk[len(lk) - 1]
+                else:
+                    other = lk[ii - 1]
+                tr = (closeid, other, rv1)
+                break
+        # print('first triangle found:', tr[0], tr[1], tr[2])
+        while 1:
+            v0 = tr[0]
+            v1 = tr[1]
+            v2 = tr[2]
+            if utils.orientation(self.points[v0], self.points[v1], point) != -1:
+                if utils.orientation(self.points[v1], self.points[v2], point) != -1:
+                    found = (v0, v1, v2)
+                    break
+                else:
+                    # -- jump-jump-jump!
+                    lk = self.stars[v1]
+                    ii = lk.index(v2)
+                    if ii == 0:
+                        other = lk[len(lk) - 1]
+                    else:
+                        other = lk[ii - 1]
+                    tr = (v1, other, v2)  # -- [1, prev, 2]
+            else:
+                # -- jump-jump-jump!
+                lk = self.stars[v0]
+                ii = lk.index(v1)
+                if ii == 0:
+                    other = lk[len(lk) - 1]
+                else:
+                    other = lk[ii - 1]
+                tr = (v0, other, v1)
+            # print('tr', tr[0], tr[1], tr[2])
+        return tr
+
+    def straight_walk(self, start: Tuple[float, float],
+                      dest: Tuple[float, float]) -> List[Tuple[int, int, int], ...]:
+        """Return a list of triangles along a straight line through the TIN.
+
+        :param start: First point of the line, given as (x,y) coordinates
+        :param dest: Second point of the line, given as (x,y) coordinates
+        :return: List of a triangles along the line
+        """
+        start_tri = self.pointlocation(start)
+        trail = []
+        trail.append(start_tri)
+        tr = start_tri
+        #print('first triangle found:', tr[0], tr[1], tr[2])
+        while 1:
+            v0 = tr[0]
+            v1 = tr[1]
+            v2 = tr[2]
+            if utils.orientation(self.points[v0], self.points[v1], dest) != -1:
+                if utils.orientation(self.points[v1], self.points[v2], dest) != -1:
+                    found = (v0, v1, v2)
+                    break
+                else:
+                    #-- jump-jump-jump!
+                    lk = self.stars[v1]
+                    ii = lk.index(v2)
+                    if ii == 0:
+                        other = lk[len(lk)-1]
+                    else:
+                        other = lk[ii-1]
+                    if utils.orientation(start, dest, self.points[other]) != -1:
+                        tr = (v1, other, v2) #-- [1, prev, 2]
+                    else:
+                        tr = (other, v2, v1)
+                    trail.append(tr)
+            else:
+                #-- jump-jump-jump!
+                lk = self.stars[v0]
+                ii = lk.index(v1)
+                if ii == 0:
+                    other = lk[len(lk)-1]
+                else:
+                    other = lk[ii-1]
+                if utils.orientation(start, dest, self.points[other]) != -1:
+                    tr = (v0, other, v1)
+                else:
+                    tr = (other, v1, v0)
+                trail.append(tr)
+            #print('tr', tr[0], tr[1], tr[2])
+        return trail
 
 
 class StarDb(object):

@@ -36,6 +36,35 @@ def distance(a,b) -> float:
     return math.sqrt((a[x] - b[x])**2 + (a[y] - b[y])**2)
 
 
+def orientation(a: Tuple[float, float], b: Tuple[float, float],
+                c: Tuple[float, float]):
+    """
+    Determine if point (p) is LEFT, RIGHT, COLLINEAR with line segment (ab).
+
+    :param a: Point 1
+    :param b: Point 2
+    :param c: Point which orientation to is determined with respect to (a,b)
+    :return: 1 if (a,b,p) is CCW, 0 if p is collinear, -1 if (a,b,p) is CW
+
+    >>> orientation((0.0, 0.0), (1.0, 0.0), (2.0, 0.0))
+    0
+    >>> orientation((0.0, 0.0), (1.0, 0.0), (0.5, 0.0))
+    0
+    >>> orientation((0.0, 0.0), (1.0, 0.0), (0.5, 1.0))
+    1
+    >>> orientation((0.0, 0.0), (1.0, 0.0), (0.5, -1.0))
+    -1
+    """
+    x,y = 0,1
+    re = ((a[x] - c[x]) * (b[y] - c[y])) - ((a[y] - c[y]) * (b[x] - c[x]))
+    if re > 0:
+        return 1
+    elif re == 0:
+        return 0
+    else:
+        return -1
+
+
 def is_between(a,c,b) -> bool:
     """Return True if point c is on the segment ab
 
