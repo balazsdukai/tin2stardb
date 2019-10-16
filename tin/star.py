@@ -30,7 +30,7 @@ class Star(object):
     def triangles(self):
         """Generate triangles from the stars.
 
-        :returns: A generator over the triangles
+        :return: A generator over the triangles
         """
         for vtx,link in self.stars:
             # To avoid duplicate triangles:
@@ -42,6 +42,16 @@ class Star(object):
                     pass
                 else:
                     yield (vtx, link[pt-1], link[pt])
+
+    def merge(self, neighbor: Star) -> None:
+        """Merge a TIN into the current one."""
+        side, segment = utils.find_side(self.points[1:],
+                                        neighbor.points[1:], abs_tol=0.1)
+        maxid = max(self.stars)
+        self.points += neighbor.points[1:] # because OBJ has 1-based indexing so the first value is None
+        stars_nbr = ((star+maxid, [v+maxid for v in link])
+                     for star, link in neighbor.stars.items())
+        self.stars.update(stars_nbr)
 
     def pointlocation(self, point: Tuple[float, float]) -> Tuple[int, int, int]:
         """Return the triangle in which the given point is located

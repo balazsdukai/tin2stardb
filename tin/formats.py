@@ -135,20 +135,6 @@ class OBJMem(OBJ, Star):
                 fo.write('f %s %s %s\n' % tri)
 
 
-    def merge(self, neighbor: OBJMem) -> None:
-        """Merge a TIN into the current one."""
-        side, segment = utils.find_side(self.points[1:],
-                                        neighbor.points[1:], abs_tol=0.1)
-        maxid = max(self.stars)
-        self.points += neighbor.points[1:] # because OBJ has 1-based indexing so the first value is None
-        stars_nbr = ((star+maxid, [v+maxid for v in link])
-                     for star, link in neighbor.stars.items())
-        self.stars.update(stars_nbr)
-
-
-
-
-
 class OBJDb(OBJ, StarDb):
 
     def insert(self, path, epsg, bbox):
