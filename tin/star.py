@@ -32,7 +32,7 @@ class Star(object):
 
         :return: A generator over the triangles
         """
-        for vtx,link in self.stars:
+        for vtx,link in self.stars.items():
             # To avoid duplicate triangles:
             # If the vertex ID is smaller than the current neighbor in the link,
             # then skip the triangle and proceed to the next. The skipped
@@ -242,10 +242,12 @@ class StarDb(object):
         """
         log.info("Generating insert VALUES")
         x, y, z = [0, 1, 2]
-        maxid = self._max_vid()
+        # Internally we use a 0-based index, but Postgres uses a 1-based primary key
+        maxid = self._max_vid() + 1
         for vid, star in stars:
-            yield maxid + vid, f"SRID={epsg};POINT({vertices[vid][x]} {vertices[vid][y]} {vertices[vid][z]})", [
-                maxid + v for v in star]
+            yield maxid + vid, \
+                  f"SRID={epsg};POINT({vertices[vid][x]} {vertices[vid][y]} {vertices[vid][z]})",\
+                  [maxid + v for v in star]
 
     def _insert_query(self, insert_generator):
         log.info("Inserting values...")

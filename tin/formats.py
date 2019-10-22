@@ -44,7 +44,7 @@ class FormatFactory:
 class OBJ(object):
 
     @staticmethod
-    def parse_obj(path: str, bbox: Tuple[float] = None):
+    def parse_obj(path: str, bbox: Tuple[float, float, float, float] = None):
         """Import from Wavefront OBJ.
 
         Returns a list of vertices and an adjacency table. The adjacency table
@@ -64,7 +64,7 @@ class OBJ(object):
         log.info(f"Parsing {path}")
         v_pat = re.compile(r"^v\s[\s\S]*")  # vertex
         f_pat = re.compile(r"^f\s[\s\S]*")  # face
-        vertices = [None]  # because OBJ has 1-based indexing
+        vertices = []
         incident = {}
 
         if bbox:
@@ -79,8 +79,10 @@ class OBJ(object):
                         tuple(float(co) for co in v.group().strip().split()[1:])
                     )
                 elif f:
+                    # This software uses a 0-based index, so the OBJ input
+                    # is changed to a 0-based too.
                     # f has value like 'f 1 2 3\n'
-                    tri = [int(tid) for tid in f.group().strip().split()[1:]]
+                    tri = [int(tid)-1 for tid in f.group().strip().split()[1:]]
                     if bbox:
                         tri_deref = tuple(vertices[vid] for vid in tri)
                         if not utils.in_bbox(tri_deref, bbox):
@@ -96,9 +98,9 @@ class OBJ(object):
                                 incident[vid] = x
         # reindex the vertices if they are subset
         if bbox:
-            new_vertices = [None] # because OBJ has 1-based indexing
+            new_vertices = []
             adjacency_table = {}
-            lookup = {old: new+1 for new,old in enumerate(incident)}
+            lookup = {old: new for new,old in enumerate(incident)}
             for old, new in lookup.items():
                 adjacency_table[new] = [lookup[vid] for vid in incident[old]]
                 new_vertices.append(vertices[old])
@@ -128,11 +130,12 @@ class OBJMem(OBJ, Star):
             log.info(f"Writing {path}")
             fo.write('# Converted from Star TIN structure to OBJ.\n')
             fo.write('# Tool written by Balázs Dukai, b.dukai@tudelft.nl\n')
-            # The first element in self.points is None, to fake a 1-based index
-            for point in self.points[1:]:
+            for point in self.points:
                 fo.write('v %s %s %s\n' % point)
             for tri in self.triangles():
-                fo.write('f %s %s %s\n' % tri)
+                # Star uses a 0-based index
+                _tri = [t+1 for t in tri]
+                fo.write(f"f {_tri[0]} {_tri[1]} {_tri[2]}\n")
 
 
 class OBJDb(OBJ, StarDb):

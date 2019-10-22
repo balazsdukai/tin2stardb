@@ -61,4 +61,4 @@ class TestOBJ:
         obj = formats.OBJDb(conn=tin_db, schema=tin_schema)
         vertices, adjacency_table = obj.parse_obj(infile, bbox=bbox)
         assert set(adjacency_table.keys()) == set(chain(*adjacency_table.values()))
-        assert set(range(1, len(vertices))) == set(adjacency_table.keys())
+        assert set(range(0, len(vertices))) == set(adjacency_table.keys())

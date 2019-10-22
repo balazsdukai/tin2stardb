@@ -9,7 +9,7 @@ from pathlib import Path
 from statistics import mean
 from math import isclose
 
-from tin import formats
+from tin import formats, schema
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +18,6 @@ log = logging.getLogger(__name__)
                                   '37fz2_13.obj', '37fz2_14.obj'])
 def infile(data_dir, request):
     yield data_dir / 'obj' / request.param
-
 
 class TestOBJMem:
     def test_parse_obj(self, data_dir):
@@ -33,7 +32,7 @@ class TestOBJMem:
         infile = data_dir / 'obj' / '37fz2_9.obj'
         obj = formats.factory.create('objmem')
         obj.read(infile)
-        for center, link in obj.stars:
+        for center, link in obj.stars.items():
             # check for duplicates in the link
             assert len(link) == len(set(link))
 

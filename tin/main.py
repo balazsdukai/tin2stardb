@@ -86,6 +86,7 @@ def import_cmd(ctx, filename, bbox, bboxes):
             # path.suffix returns '.obj' from some/path/file.obj
             f = path.suffix.lower().split('.')[1] # suffix without leading dot
             if f == 'obj':
+                # FIXME: needs objdb
                 fmt = 'objmem'
             else:
                 raise click.exceptions.BadParameter(f"Unsupported format {f}")

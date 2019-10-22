@@ -1,9 +1,9 @@
 database:
-    dbname: tin_test
+    dbname: tin_db
     host: localhost
-    port: 5432
-    user: someuser
-    password:
+    port: 5501
+    user: tin_tester
+    password: tin_tester
 
 tin_schema:
     schema: tin
