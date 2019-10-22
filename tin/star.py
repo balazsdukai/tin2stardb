@@ -23,7 +23,7 @@ class Star(object):
     """Main class for operating on a Star-TIN structure in memory."""
 
     def __init__(self, points: List[Tuple[float, float, float]] = None,
-                 stars: Mapping[int, Tuple[int, ...]] = None):
+                 stars: Mapping[int, List[int, ...]] = None):
         self.stars = stars
         self.points = points
 
@@ -46,21 +46,33 @@ class Star(object):
     def add(self, neighbor: Star) -> None:
         """Adds a TIN into the current one by combining their Stars.
 
-        .. warning:: This operation modifies the current TIN.
+        .. warning:: This operation modifies the TIN.
 
         .. note:: This operation does not remove duplicate points in case the
             two TINs overlap.
         """
+        log.info("Adding a neighboring TIN to the Stars")
         maxid = max(self.stars)
         self.points += neighbor.points[1:] # because OBJ has 1-based indexing so the first value is None
         stars_nbr = ((star+maxid, [v+maxid for v in link])
                      for star, link in neighbor.stars.items())
         self.stars.update(stars_nbr)
 
-    def merge(self, neighbor: Star) -> None:
-        """Merge a TIN into the current one."""
-        side, segment = utils.find_side(self.points[1:],
-                                        neighbor.points[1:], abs_tol=0.1)
+    def merge(self, neighbor: Star, strategy: str='deduplicate') -> None:
+        """Merge a TIN into the current one.
+
+        :param neighbor: An adjacent TIN in Star structure
+        :param strategy: The strategy to use for merging. If *deduplicate*, then
+            the two TINs are expected to touch, thus have a set of co-located
+            points along the edge in which they are touching.
+        """
+        # side, segment = utils.find_side(self.points[1:],
+        #                                 neighbor.points[1:], abs_tol=0.1)
+        if strategy.lower() == 'deduplicate':
+            self.add(neighbor)
+            self.deduplicate()
+        else:
+            raise ValueError(f"Unknown merge strategy {strategy}")
 
     def pointlocation(self, point: Tuple[float, float]) -> Tuple[int, int, int]:
         """Return the triangle in which the given point is located
@@ -190,17 +202,62 @@ class Star(object):
         topologically connected TIN.
         """
 
-    def deduplicate(self):
+    def deduplicate(self) -> None:
         """Remove duplicate points from a TIN.
+
         1) Combine the two TINs into a single Star
         2) Cast vertices into strings using the given precision, or just keep
             the precision as it is
         3) Create hash-table (dict) and keep track of the vertex indices,
             not loosing the duplicates
-        4) Replace the duplicate with the original vertex
-        :return:
-        """
+        4) If two points are co-located, take their mean z-value as the new z
+        5) Replace the duplicate with the original vertex
 
+        .. note:: Ignores the z coordinate for determining point co-location.
+
+        .. warning:: This operation modifies the TIN.
+
+        :return: None
+        """
+        log.info("Removing duplicate points from the TIN")
+        # a Point is a Vertex embedded in space
+        pt_hash_tbl = {}
+        for vtx2,pt in enumerate(self.points):
+            pt_str = f"{pt[0]},{pt[1]}"
+            # if co-located points found
+            if pt_str not in pt_hash_tbl:
+                pt_hash_tbl[pt_str] = vtx2
+            else:
+                vtx1 = pt_hash_tbl[pt_str]
+                _z = self.points[vtx1][2]
+                # average z in case of co-located points
+                new_z = (pt[2] + _z) / 2
+                log.debug(new_z)
+                # keep the point that was found first
+                # new_pt = (self.points[vtx1][0], self.points[vtx1][1], new_z)
+                new_pt = (self.points[vtx1][0], self.points[vtx1][1], self.points[vtx1][2])
+                self.points[vtx1] = new_pt
+                del _z, new_pt, new_z
+                # go through the stars and replace the references of vtx2 to
+                # vtx1 in the links
+                for star in self.stars[vtx2]:
+                    try:
+                        i = self.stars[star].index(vtx2)
+                        self.stars[star][i] = vtx1
+                    except ValueError:
+                        log.error(f"Expected to find vertex {vtx2} in the stars "
+                                  f"of {vtx2}:{self.stars[vtx2]}")
+                # add the link of vtx2 to the star of vtx1
+                link_vtx1 = self.stars[vtx1]
+                link_vtx1.extend(v for v in self.stars[vtx2]
+                                 if v not in link_vtx1)
+                # sort the link ccw
+                _d = dict(utils.sort_ccw(self.points, {vtx1: link_vtx1}))
+                # update the link of vtx1 with the merged link of vtx1+vtx2
+                self.stars[vtx1] = _d[vtx1]
+                del self.stars[vtx2], _d
+                # TODO: also need to remove vtx2 from self.points and then
+                #   update the whole stars again.
 
 
 class StarDb(object):

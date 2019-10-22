@@ -266,7 +266,12 @@ def merge_cmd(ctx, infiles, outfile):
         else:
             raise click.exceptions.FileError(f"{str(p)} is not a file")
     outpath = Path(outfile).resolve()
-    log = ctx.obj['log']
+    base = formats.factory.create('objmem')
+    neighbor = formats.factory.create('objmem')
+    base.read(inpaths[0])
+    neighbor.read(inpaths[1])
+    base.merge(neighbor, strategy='deduplicate')
+    base.write(outpath)
 
 
 main.add_command(import_cmd)

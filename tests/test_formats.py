@@ -83,3 +83,24 @@ class TestOBJMem:
         triangles_2 = obj.straight_walk(*line)
         print(triangles)
         assert triangles == triangles_2
+
+    def test_merge(self, data_dir):
+        infile = data_dir / 'obj' / '37fz2_8.obj'
+        infile_2 = data_dir / 'obj' / '37fz2_9.obj'
+        obj = formats.factory.create('objmem')
+        obj.read(infile)
+        obj_2 = formats.factory.create('objmem')
+        obj_2.read(infile_2)
+        obj.merge(obj_2, strategy='deduplicate')
+
+
+class TestOBJDb:
+    def test_import(self, tin_db, tin_schema, infile, cfg):
+        # TODO: need to factor out the schema creation and set up fixtures for it
+        schema.create_relations(tin_db, tin_schema, cfg['epsg'])
+        obj = formats.factory.create('objdb', conn=tin_db, schema=tin_schema)
+        obj.insert(infile, cfg['epsg'], bbox=None)
+
+    def test_export(self, tin_db, tin_schema, cfg, data_dir):
+        obj = formats.factory.create('objdb', conn=tin_db, schema=tin_schema)
+        obj.export(data_dir / 'test_db_out.obj')
