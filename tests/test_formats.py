@@ -6,6 +6,8 @@
 import pytest
 import logging
 from pathlib import Path
+from statistics import mean
+from math import isclose
 
 from tin import formats
 
@@ -57,11 +59,16 @@ class TestOBJMem:
 
     def test_pointlocation(self, data_dir):
         infile = data_dir / 'obj' / '37fz2_9.obj'
-        point = (96660.198,439771.976)
+        point = (96663.12766666667, 439773.052) # centroid of a triangle
         obj = formats.factory.create('objmem')
         obj.read(infile)
         tri = obj.pointlocation(point)
-        print(tri)
+        x_ctr = mean(obj.points[t][0] for t in tri)
+        y_ctr = mean(obj.points[t][1] for t in tri)
+        # check if the located triangle's centroid and the search point (same
+        # centroid) match
+        assert isclose(point[0], x_ctr)
+        assert isclose(point[1], y_ctr)
 
     def test_straightwalk(self, data_dir):
         line = [(97246.0, 441430.0), (96123.0, 441430.0)]
