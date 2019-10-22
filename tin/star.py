@@ -43,15 +43,24 @@ class Star(object):
                 else:
                     yield (vtx, link[pt-1], link[pt])
 
-    def merge(self, neighbor: Star) -> None:
-        """Merge a TIN into the current one."""
-        side, segment = utils.find_side(self.points[1:],
-                                        neighbor.points[1:], abs_tol=0.1)
+    def add(self, neighbor: Star) -> None:
+        """Adds a TIN into the current one by combining their Stars.
+
+        .. warning:: This operation modifies the current TIN.
+
+        .. note:: This operation does not remove duplicate points in case the
+            two TINs overlap.
+        """
         maxid = max(self.stars)
         self.points += neighbor.points[1:] # because OBJ has 1-based indexing so the first value is None
         stars_nbr = ((star+maxid, [v+maxid for v in link])
                      for star, link in neighbor.stars.items())
         self.stars.update(stars_nbr)
+
+    def merge(self, neighbor: Star) -> None:
+        """Merge a TIN into the current one."""
+        side, segment = utils.find_side(self.points[1:],
+                                        neighbor.points[1:], abs_tol=0.1)
 
     def pointlocation(self, point: Tuple[float, float]) -> Tuple[int, int, int]:
         """Return the triangle in which the given point is located
@@ -166,8 +175,8 @@ class Star(object):
         return trail
 
     def sew(self):
-        """Sew two TINs into a topologically valid TIN by traversing along a
-        straight line that is the where the two TINs touch.
+        """.. todo:: Sew two TINs into a topologically valid TIN by traversing along a
+                straight line that is the where the two TINs touch.
 
         The algorithm is an adaptation of the 'straight walk' algorithm. As
         input it requires a *single TIN* and a *line segment*. The single TIN is
@@ -180,6 +189,18 @@ class Star(object):
         one from the first TIN in the triangle stars, thereby creating a
         topologically connected TIN.
         """
+
+    def deduplicate(self):
+        """Remove duplicate points from a TIN.
+        1) Combine the two TINs into a single Star
+        2) Cast vertices into strings using the given precision, or just keep
+            the precision as it is
+        3) Create hash-table (dict) and keep track of the vertex indices,
+            not loosing the duplicates
+        4) Replace the duplicate with the original vertex
+        :return:
+        """
+
 
 
 class StarDb(object):

@@ -43,7 +43,7 @@ class TestOBJMem:
         obj.read(infile)
         obj.write(Path('/tmp/tin_test.obj'))
 
-    def test_merge(self, data_dir):
+    def test_add(self, data_dir):
         base = data_dir / 'obj' / '37fz2_8.obj'
         neighbor = data_dir / 'obj' / '37fz2_9.obj'
         obj_base = formats.factory.create('objmem')
@@ -52,7 +52,7 @@ class TestOBJMem:
         obj_neighbor.read(neighbor)
         base_pts = len(obj_base.points)
         base_stars = max(obj_base.stars)
-        obj_base.merge(obj_neighbor)
+        obj_base.add(obj_neighbor)
         assert base_pts + len(obj_neighbor.points) - 1 == len(obj_base.points)
         assert len(obj_base.points) - 1 == max(obj_base.stars)
         assert base_stars + max(obj_neighbor.stars) == max(obj_base.stars)
@@ -80,7 +80,7 @@ class TestOBJMem:
         obj_2.read(infile_2)
         triangles = obj.straight_walk(*line)
         print(triangles)
-        obj.merge(obj_2)
+        obj.add(obj_2)
         triangles_2 = obj.straight_walk(*line)
         print(triangles)
         assert triangles == triangles_2
