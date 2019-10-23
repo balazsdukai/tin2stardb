@@ -54,6 +54,13 @@ class TestCCW:
         res = utils.link_is_consistent(obj.stars)
         assert all(consistent for vid, consistent in res)
 
+    def test_triangle_is_consistent(self, obj_base):
+        infile = obj_base / '37fz2_9.obj'
+        obj = formats.OBJMem()
+        obj.read(infile)
+        res = utils.triangle_is_consistent(obj.stars, obj.triangles())
+        assert all(consistent for tri, consistent in res)
+
 class TestSide:
     @pytest.mark.parametrize('poly, result', [
         [[(0.9, 0.5), (1.6, 0.5), (1.6, 0.9), (0.9, 0.9)],

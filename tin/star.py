@@ -33,16 +33,16 @@ class Star(object):
 
         :return: A generator over the triangles
         """
-        for vtx,link in self.stars.items():
+        for star, link in self.stars.items():
             # To avoid duplicate triangles:
             # If the vertex ID is smaller than the current neighbor in the link,
             # then skip the triangle and proceed to the next. The skipped
             # triangle will be attached to another star.
             for pt,pid in enumerate(link):
-                if (vtx > link[pt-1]) or (vtx > link[pt]):
+                if (star > link[pt-1]) or (star > link[pt]):
                     pass
                 else:
-                    yield (vtx, link[pt-1], link[pt])
+                    yield (star, link[pt-1], link[pt])
 
     def add(self, neighbor: Star) -> None:
         """Adds a TIN into the current one by combining their Stars.
@@ -78,6 +78,8 @@ class Star(object):
 
     def pointlocation(self, point: Tuple[float, float]) -> Tuple[int, int, int]:
         """Return the triangle in which the given point is located
+
+        Reference: pgTIN from Hugo Ledoux
 
         :param point: The point in question, given as (x,y) coordinates
         :return: The triangle in which the point is located
@@ -306,9 +308,10 @@ class Star(object):
                 log.warning(f"Link of star {star} is not CCW. "
                             f"{self.stars[star]}; "
                             f"{[self.points[v] for v in self.stars[star]]}")
-        tris_consistent = False
+        tris = utils.triangle_is_consistent(self.stars, self.triangles())
         consistent = all(result[0] for star, result in validation_summary.items())
         ccw = all(result[1] for star, result in validation_summary.items())
+        tris_cons = all(consistent for tri, consistent in tris)
         return consistent and ccw
 
 

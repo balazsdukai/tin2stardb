@@ -92,6 +92,7 @@ class TestOBJMem:
         obj_2 = formats.factory.create('objmem')
         obj_2.read(infile_2)
         obj.merge(obj_2, strategy='deduplicate', precision=3)
+        assert obj.is_valid()
 
 
 class TestOBJDb:

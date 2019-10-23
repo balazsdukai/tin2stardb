@@ -47,6 +47,35 @@ def link_is_consistent(stars) -> Generator:
         yield star, all(star in stars[_star] for _star in link)
 
 
+def _triangle_is_consistent(stars) -> Generator:
+    """Check that each adjacent triangle's vertices are consistent in it's star
+    with the current one."""
+    def _tris_consistent(stars, star, link):
+        for pt, pid in enumerate(link):
+            tri = (star, link[pt - 1], link[pt])
+            link_neighbor = stars[tri[1]]
+            _si = link_neighbor.index(star)
+            if _si:
+                yield link_neighbor[_si-1] == tri[2]
+            else:
+                yield False
+    for star, link in stars.items():
+       yield star, all(_tris_consistent(stars, star, link))
+
+def triangle_is_consistent(stars, triangles) -> Generator:
+    """Check that each adjacent triangle's vertices are consistent in it's star
+    with the current one."""
+    def stars_are_consistent(tri, stars):
+        for i, star in enumerate(tri):
+            link = stars[star]
+            try:
+                yield link.index(tri[i-2])+1 == link.index(tri[i-1])
+            except ValueError:
+                yield False
+    for tri in triangles:
+        yield tri, all(stars_are_consistent(tri, stars))
+
+
 def distance(a,b) -> float:
     """Distance between point a and point b"""
     x,y = 0,1
