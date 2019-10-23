@@ -307,7 +307,9 @@ class Star(object):
                             f"{self.stars[star]}; "
                             f"{[self.points[v] for v in self.stars[star]]}")
         tris_consistent = False
-        return all()
+        consistent = all(result[0] for star, result in validation_summary.items())
+        ccw = all(result[1] for star, result in validation_summary.items())
+        return consistent and ccw
 
 
 class StarDb(object):
