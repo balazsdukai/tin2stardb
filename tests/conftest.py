@@ -21,6 +21,16 @@ def data_dir(t_dir):
     yield t_dir / 'data'
 
 
+@pytest.fixture(scope='session')
+def obj_base(t_dir):
+    yield t_dir / 'data' / 'obj' / 'base'
+
+
+@pytest.fixture(scope='session')
+def obj_5m(t_dir):
+    yield t_dir / 'data' / 'obj' / 'densified_5m'
+
+
 @pytest.fixture('session')
 def root_dir(t_dir):
     yield t_dir.parent

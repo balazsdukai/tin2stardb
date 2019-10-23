@@ -7,6 +7,7 @@ import logging
 import re
 import random
 from typing import List, Tuple, Mapping
+from copy import deepcopy
 
 from psycopg2 import extras, errors
 import fiona
@@ -58,7 +59,8 @@ class Star(object):
                      for star, link in neighbor.stars.items())
         self.stars.update(stars_nbr)
 
-    def merge(self, neighbor: Star, strategy: str='deduplicate') -> None:
+    def merge(self, neighbor: Star, strategy: str='deduplicate',
+              precision: int=3) -> None:
         """Merge a TIN into the current one.
 
         :param neighbor: An adjacent TIN in Star structure
@@ -70,7 +72,7 @@ class Star(object):
         #                                 neighbor.points[1:], abs_tol=0.1)
         if strategy.lower() == 'deduplicate':
             self.add(neighbor)
-            self.deduplicate()
+            self.deduplicate(precision)
         else:
             raise ValueError(f"Unknown merge strategy {strategy}")
 
@@ -202,7 +204,7 @@ class Star(object):
         topologically connected TIN.
         """
 
-    def deduplicate(self) -> None:
+    def deduplicate(self, precision: int = 3) -> None:
         """Remove duplicate points from a TIN.
 
         1) Combine the two TINs into a single Star
@@ -219,11 +221,12 @@ class Star(object):
 
         :return: None
         """
-        log.info("Removing duplicate points from the TIN")
+        log.info(f"Removing duplicate points from the TIN. "
+                 f"Precision is set to {precision} decimal digits")
         # a Point is a Vertex embedded in space
         pt_hash_tbl = {}
         for vtx2,pt in enumerate(self.points):
-            pt_str = f"{pt[0]},{pt[1]}"
+            pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
             # if co-located points found
             if pt_str not in pt_hash_tbl:
                 pt_hash_tbl[pt_str] = vtx2
@@ -232,10 +235,8 @@ class Star(object):
                 _z = self.points[vtx1][2]
                 # average z in case of co-located points
                 new_z = (pt[2] + _z) / 2
-                log.debug(new_z)
                 # keep the point that was found first
-                # new_pt = (self.points[vtx1][0], self.points[vtx1][1], new_z)
-                new_pt = (self.points[vtx1][0], self.points[vtx1][1], self.points[vtx1][2])
+                new_pt = (self.points[vtx1][0], self.points[vtx1][1], new_z)
                 self.points[vtx1] = new_pt
                 del _z, new_pt, new_z
                 # go through the stars and replace the references of vtx2 to
@@ -255,9 +256,35 @@ class Star(object):
                 _d = dict(utils.sort_ccw(self.points, {vtx1: link_vtx1}))
                 # update the link of vtx1 with the merged link of vtx1+vtx2
                 self.stars[vtx1] = _d[vtx1]
-                del self.stars[vtx2], _d
-                # TODO: also need to remove vtx2 from self.points and then
-                #   update the whole stars again.
+                # delete vtx2 star and point
+                self.points[vtx2] = None
+                del self.stars[vtx2]
+                del _d
+        del pt_hash_tbl
+        # Create a new points list, excluding the deleted points and create a
+        # mapping of the old-new vertices
+        vid = 0
+        new_points = []
+        old_new_map = {v:None for v in range(len(self.points))}
+        for vtx, point in enumerate(self.points):
+            if point is None:
+                old_new_map[vtx] = None
+            else:
+                old_new_map[vtx] = vid
+                new_points.append(point)
+                vid += 1
+        # Reindex the stars with the new vertices
+        new_stars = {}
+        for old_v, new_v in old_new_map.items():
+            if new_v is not None:
+                old_link = self.stars[old_v]
+                new_stars[new_v] = [old_new_map[v] for v in old_link
+                                    if old_new_map[v] is not None]
+        # Replace the points and stars
+        self.points = deepcopy(new_points)
+        self.stars = deepcopy(new_stars)
+        del new_stars, new_points, old_new_map
+
 
 
 class StarDb(object):

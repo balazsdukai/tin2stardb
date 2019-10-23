@@ -18,7 +18,6 @@ log = logging.getLogger(__name__)
 
 def sort_ccw(vertices, adjacency_table):
     """Sort vertices in counter-clockwise order."""
-    log.info("Sorting adjacent vertices in stars in CCW-order")
     x, y, z = [0, 1, 2]
     for center, adjacent in adjacency_table.items():
         localized = [(vertices[v][x] - vertices[center][x],
@@ -28,6 +27,10 @@ def sort_ccw(vertices, adjacency_table):
         # sort vertices in counter-clockwise order around the center
         ccw = sorted(localized, key=lambda p: math.atan2(p[1], p[0]))
         yield center, [rev_lookup[co] for co in ccw]
+
+
+def link_is_ccw() -> bool:
+    """.. todo:: Check if the link of the star is ordered CounterClockWise."""
 
 
 def distance(a,b) -> float:
