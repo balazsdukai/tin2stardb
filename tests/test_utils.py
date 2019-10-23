@@ -6,7 +6,7 @@
 import pytest
 import logging
 
-from tin import utils
+from tin import utils, formats
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +28,25 @@ class TestBBOX:
     ])
     def test_bbox(self, polygon, bbox):
         assert utils.bbox(polygon) == bbox
+
+
+class TestCCW:
+    def test_sort_ccw(self, obj_base):
+        infile = obj_base / '37fz2_9.obj'
+        obj = formats.OBJMem()
+        vertices, adjacency_table = obj.parse_obj(infile)
+        stars = utils.sort_ccw(vertices, adjacency_table)
+        for vid, star in stars:
+            # check for duplicates in the star
+            assert len(star) == len(set(star))
+
+    def test_link_is_ccw(self, obj_base):
+        infile = obj_base / '37fz2_9.obj'
+        obj = formats.OBJMem()
+        obj.read(infile)
+        res = utils.link_is_ccw(obj.points, obj.stars)
+        for vid, is_ccw in res:
+            assert is_ccw
 
 class TestSide:
     @pytest.mark.parametrize('poly, result', [

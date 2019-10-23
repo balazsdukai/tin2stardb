@@ -223,7 +223,6 @@ class Star(object):
         """
         log.info(f"Removing duplicate points from the TIN. "
                  f"Precision is set to {precision} decimal digits")
-        # a Point is a Vertex embedded in space
         pt_hash_tbl = {}
         for vtx2,pt in enumerate(self.points):
             pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
@@ -285,6 +284,19 @@ class Star(object):
         self.stars = deepcopy(new_stars)
         del new_stars, new_points, old_new_map
 
+    def is_valid(self) -> bool:
+        """Validates a Star structure.
+
+        (1) checks if the links are consistent, thus vertex A is also present in
+            the link of vertex B, if vertex B is in the link of vertex A
+        (2) checks if the link is ordered CounterClockWise
+        (3) checks for each triangle that the vertices in adjacent triangles
+            are consistent
+        """
+        links_consistent = False
+        is_ccw = utils.link_is_ccw(self.points, self.stars)
+        tris_consistent = False
+        return links_consistent and is_ccw and tris_consistent
 
 
 class StarDb(object):

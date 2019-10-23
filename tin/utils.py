@@ -16,21 +16,28 @@ except ImportError as e:
 log = logging.getLogger(__name__)
 
 
-def sort_ccw(vertices, adjacency_table):
-    """Sort vertices in counter-clockwise order."""
+def _ccw(vertices, star, link):
+    """Sort the link in CounterClockWise order around the star"""
     x, y, z = [0, 1, 2]
-    for center, adjacent in adjacency_table.items():
-        localized = [(vertices[v][x] - vertices[center][x],
-                      vertices[v][y] - vertices[center][y]) for v in
-                     adjacent]
-        rev_lookup = {localized[i]: a for i, a in enumerate(adjacent)}
-        # sort vertices in counter-clockwise order around the center
-        ccw = sorted(localized, key=lambda p: math.atan2(p[1], p[0]))
-        yield center, [rev_lookup[co] for co in ccw]
+    localized = [(vertices[v][x] - vertices[star][x],
+                  vertices[v][y] - vertices[star][y]) for v in
+                 link]
+    rev_lookup = {localized[i]: a for i, a in enumerate(link)}
+    return rev_lookup, sorted(localized, key=lambda p: math.atan2(p[1], p[0]))
 
 
-def link_is_ccw() -> bool:
-    """.. todo:: Check if the link of the star is ordered CounterClockWise."""
+def sort_ccw(vertices, stars):
+    """Sort vertices in counter-clockwise order."""
+    for star, link in stars.items():
+        rev_lookup, ccw = _ccw(vertices, star, link)
+        yield star, [rev_lookup[co] for co in ccw]
+
+
+def link_is_ccw(vertices, stars) -> bool:
+    """Check if the link of the star is ordered CounterClockWise."""
+    for star, link in stars.items():
+        rev_lookup, ccw = _ccw(vertices, star, link)
+        yield star, all([rev_lookup[co]==link[i] for i,co in enumerate(ccw)])
 
 
 def distance(a,b) -> float:

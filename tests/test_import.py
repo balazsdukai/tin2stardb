@@ -7,7 +7,7 @@ import pytest
 import logging
 from itertools import chain
 
-from tin import formats, utils
+from tin import formats
 
 log = logging.getLogger(__name__)
 
@@ -42,15 +42,6 @@ class TestOBJ:
         obj = formats.OBJDb(conn=tin_db, schema=tin_schema)
         vertices, adjacency_table = obj.parse_obj(infile)
         for center, star in adjacency_table.items():
-            # check for duplicates in the star
-            assert len(star) == len(set(star))
-
-    def test_sort_ccw(self, tin_db, tin_schema, infile, data_dir):
-        infile = data_dir / 'obj' / '37fz2_9.obj'
-        obj = formats.OBJDb(conn=tin_db, schema=tin_schema)
-        vertices, adjacency_table = obj.parse_obj(infile)
-        stars = utils.sort_ccw(vertices, adjacency_table)
-        for vid, star in stars:
             # check for duplicates in the star
             assert len(star) == len(set(star))
 
