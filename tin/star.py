@@ -293,10 +293,21 @@ class Star(object):
         (3) checks for each triangle that the vertices in adjacent triangles
             are consistent
         """
-        links_consistent = False
-        is_ccw = utils.link_is_ccw(self.points, self.stars)
+        validation_summary = {star:[] for star in self.stars}
+        for star, consistent in utils.link_is_consistent(self.stars):
+            validation_summary[star].append(consistent)
+            if not consistent:
+                log.warning(f"Link of star {star} is not consistent. "
+                            f"{self.stars[star]}; "
+                            f"{[self.points[v] for v in self.stars[star]]}")
+        for star, ccw in utils.link_is_ccw(self.points, self.stars):
+            validation_summary[star].append(ccw)
+            if not ccw:
+                log.warning(f"Link of star {star} is not CCW. "
+                            f"{self.stars[star]}; "
+                            f"{[self.points[v] for v in self.stars[star]]}")
         tris_consistent = False
-        return links_consistent and is_ccw and tris_consistent
+        return all()
 
 
 class StarDb(object):

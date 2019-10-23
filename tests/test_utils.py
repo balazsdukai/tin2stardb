@@ -45,8 +45,14 @@ class TestCCW:
         obj = formats.OBJMem()
         obj.read(infile)
         res = utils.link_is_ccw(obj.points, obj.stars)
-        for vid, is_ccw in res:
-            assert is_ccw
+        assert all(ccw for vid, ccw in res)
+
+    def test_link_is_consistent(self, obj_base):
+        infile = obj_base / '37fz2_9.obj'
+        obj = formats.OBJMem()
+        obj.read(infile)
+        res = utils.link_is_consistent(obj.stars)
+        assert all(consistent for vid, consistent in res)
 
 class TestSide:
     @pytest.mark.parametrize('poly, result', [

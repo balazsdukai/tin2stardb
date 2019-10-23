@@ -4,7 +4,7 @@
 
 import math
 from statistics import mean
-from typing import Tuple, Union, Iterable
+from typing import Tuple, Union, Iterable, Generator
 import logging
 
 MODULE_MATPLOTLIB_AVAILABLE = True
@@ -26,18 +26,25 @@ def _ccw(vertices, star, link):
     return rev_lookup, sorted(localized, key=lambda p: math.atan2(p[1], p[0]))
 
 
-def sort_ccw(vertices, stars):
+def sort_ccw(vertices, stars) -> Generator:
     """Sort vertices in counter-clockwise order."""
     for star, link in stars.items():
         rev_lookup, ccw = _ccw(vertices, star, link)
         yield star, [rev_lookup[co] for co in ccw]
 
 
-def link_is_ccw(vertices, stars) -> bool:
+def link_is_ccw(vertices, stars) -> Generator:
     """Check if the link of the star is ordered CounterClockWise."""
     for star, link in stars.items():
         rev_lookup, ccw = _ccw(vertices, star, link)
-        yield star, all([rev_lookup[co]==link[i] for i,co in enumerate(ccw)])
+        yield star, all(rev_lookup[co]==link[i] for i,co in enumerate(ccw))
+
+
+def link_is_consistent(stars) -> Generator:
+    """Checks if the links are consistent, thus vertex A is also present in the
+    link of vertex B, if vertex B is in the link of vertex A."""
+    for star, link in stars.items():
+        yield star, all(star in stars[_star] for _star in link)
 
 
 def distance(a,b) -> float:
