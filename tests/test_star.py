@@ -11,19 +11,6 @@ from tin import formats
 log = logging.getLogger(__name__)
 
 class TestStar:
-    def test_add(self, obj_base):
-        base = obj_base / '37fz2_8.obj'
-        neighbor = obj_base / '37fz2_9.obj'
-        obj_base = formats.factory.create('objmem')
-        obj_neighbor = formats.factory.create('objmem')
-        obj_base.read(base)
-        obj_neighbor.read(neighbor)
-        base_pts = len(obj_base.points)
-        base_stars = max(obj_base.stars)
-        obj_base.add(obj_neighbor)
-        assert base_pts + len(obj_neighbor.points) - 1 == len(obj_base.points)
-        assert len(obj_base.points) - 1 == max(obj_base.stars)
-        assert base_stars + max(obj_neighbor.stars) == max(obj_base.stars)
 
     def test_pointlocation(self, obj_base):
         infile = obj_base / '37fz2_9.obj'
@@ -52,6 +39,19 @@ class TestStar:
         triangles_2 = obj.straight_walk(*line)
         print(triangles)
         assert triangles == triangles_2
+
+    def test_add(self, obj_5m):
+        base = obj_5m / '37fz2_8.obj'
+        neighbor = obj_5m / '37fz2_9.obj'
+        obj_base = formats.factory.create('objmem')
+        obj_neighbor = formats.factory.create('objmem')
+        obj_base.read(base)
+        obj_neighbor.read(neighbor)
+        base_pts = len(obj_base.points)
+        base_stars = max(obj_base.stars)
+        obj_base.add(obj_neighbor)
+        assert base_pts + len(obj_neighbor.points) == len(obj_base.points)
+        assert len(obj_base.points) == max(obj_base.stars)+1
 
     def test_merge(self, obj_5m):
         infile = obj_5m / '37fz2_8.obj'

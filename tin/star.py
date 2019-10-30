@@ -44,37 +44,7 @@ class Star(object):
                 else:
                     yield (star, link[pt-1], link[pt])
 
-    def add(self, neighbor: Star) -> None:
-        """Adds a TIN into the current one by combining their Stars.
 
-        .. warning:: This operation modifies the TIN.
-
-        .. note:: This operation does not remove duplicate points in case the
-            two TINs overlap.
-        """
-        log.info("Adding a neighboring TIN to the Stars")
-        maxid = max(self.stars)
-        self.points += neighbor.points[1:] # because OBJ has 1-based indexing so the first value is None
-        stars_nbr = ((star+maxid, [v+maxid for v in link])
-                     for star, link in neighbor.stars.items())
-        self.stars.update(stars_nbr)
-
-    def merge(self, neighbor: Star, strategy: str='deduplicate',
-              precision: int=3) -> None:
-        """Merge a TIN into the current one.
-
-        :param neighbor: An adjacent TIN in Star structure
-        :param strategy: The strategy to use for merging. If *deduplicate*, then
-            the two TINs are expected to touch, thus have a set of co-located
-            points along the edge in which they are touching.
-        """
-        # side, segment = utils.find_side(self.points[1:],
-        #                                 neighbor.points[1:], abs_tol=0.1)
-        if strategy.lower() == 'deduplicate':
-            self.add(neighbor)
-            self.deduplicate(precision)
-        else:
-            raise ValueError(f"Unknown merge strategy {strategy}")
 
     def pointlocation(self, point: Tuple[float, float]) -> Tuple[int, int, int]:
         """Return the triangle in which the given point is located
@@ -190,21 +160,45 @@ class Star(object):
             #print('tr', tr[0], tr[1], tr[2])
         return trail
 
-    def sew(self):
-        """.. todo:: Sew two TINs into a topologically valid TIN by traversing along a
-                straight line that is the where the two TINs touch.
+    def add(self, neighbor: Star) -> None:
+        """Adds a TIN into the current one by combining their Stars.
 
-        The algorithm is an adaptation of the 'straight walk' algorithm. As
-        input it requires a *single TIN* and a *line segment*. The single TIN is
-        is a combination of two TINs by combining their points into a single
-        array and reindexing the vertices of the second. The line segment is
-        the line along which the two TINs touch.
+        .. warning:: This operation modifies the TIN.
 
-        The algorithm progresses along the *line segment* and removes the
-        duplicate vertices, by replacing the vertex from the second TIN with
-        one from the first TIN in the triangle stars, thereby creating a
-        topologically connected TIN.
+        .. note:: This operation does not remove duplicate points in case the
+            two TINs overlap.
         """
+        log.info("Adding a neighboring TIN to the Stars")
+        maxid = max(self.stars)
+        neighbor_start_id = maxid+1
+        precision = 3
+
+        for pt in self.points:
+            pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
+            if pt_str == '97178.883,440688.156':
+                log.debug(f"Found target vertex in self before add {pt_str}")
+            if pt_str == '96132.982,440270.000':
+                log.debug(f"Found source vertex in self before add {pt_str}")
+
+        for pt in neighbor.points:
+            pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
+            if pt_str == '97178.883,440688.156':
+                log.debug(f"Found target vertex in neighbor before add {pt_str}")
+            if pt_str == '96132.982,440270.000':
+                log.debug(f"Found source vertex in neighbor before add {pt_str}")
+
+        self.points += neighbor.points
+
+        for pt in self.points:
+            pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
+            if pt_str == '97178.883,440688.156':
+                log.debug(f"Found target vertex after add {pt_str}")
+            if pt_str == '96132.982,440270.000':
+                log.debug(f"Found source vertex after add {pt_str}")
+
+        stars_nbr = ((neighbor_start_id+star, [neighbor_start_id+v for v in link])
+                     for star, link in neighbor.stars.items())
+        self.stars.update(stars_nbr)
 
     def deduplicate(self, precision: int = 3) -> None:
         """Remove duplicate points from a TIN.
@@ -229,6 +223,10 @@ class Star(object):
         for vtx2,pt in enumerate(self.points):
             pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
             # if co-located points found
+            if pt_str == '97178.883,440688.156':
+                log.debug(f"Found target vertex {pt_str}")
+            if pt_str == '96132.982,440270.000':
+                log.debug(f"Found source vertex {pt_str}")
             if pt_str not in pt_hash_tbl:
                 pt_hash_tbl[pt_str] = vtx2
             else:
@@ -285,6 +283,39 @@ class Star(object):
         self.points = deepcopy(new_points)
         self.stars = deepcopy(new_stars)
         del new_stars, new_points, old_new_map
+
+    def sew(self):
+        """.. todo:: Sew two TINs into a topologically valid TIN by traversing along a
+                straight line that is the where the two TINs touch.
+
+        The algorithm is an adaptation of the 'straight walk' algorithm. As
+        input it requires a *single TIN* and a *line segment*. The single TIN is
+        is a combination of two TINs by combining their points into a single
+        array and reindexing the vertices of the second. The line segment is
+        the line along which the two TINs touch.
+
+        The algorithm progresses along the *line segment* and removes the
+        duplicate vertices, by replacing the vertex from the second TIN with
+        one from the first TIN in the triangle stars, thereby creating a
+        topologically connected TIN.
+        """
+
+    def merge(self, neighbor: Star, strategy: str='deduplicate',
+              precision: int=3) -> None:
+        """Merge a TIN into the current one.
+
+        :param neighbor: An adjacent TIN in Star structure
+        :param strategy: The strategy to use for merging. If *deduplicate*, then
+            the two TINs are expected to touch, thus have a set of co-located
+            points along the edge in which they are touching.
+        """
+        # side, segment = utils.find_side(self.points[1:],
+        #                                 neighbor.points[1:], abs_tol=0.1)
+        if strategy.lower() == 'deduplicate':
+            self.add(neighbor)
+            self.deduplicate(precision)
+        else:
+            raise ValueError(f"Unknown merge strategy {strategy}")
 
     def is_valid(self) -> bool:
         """Validates a Star structure.
