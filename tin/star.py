@@ -312,6 +312,7 @@ class Star(object):
         consistent = all(result[0] for star, result in validation_summary.items())
         ccw = all(result[1] for star, result in validation_summary.items())
         tris_cons = all(consistent for tri, consistent in tris)
+        # TODO: include tris_cons in return
         return consistent and ccw
 
 
