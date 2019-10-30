@@ -8,6 +8,7 @@ import re
 import random
 from typing import List, Tuple, Mapping
 from copy import deepcopy
+from statistics import mean, variance
 
 from psycopg2 import extras, errors
 import fiona
@@ -171,31 +172,7 @@ class Star(object):
         log.info("Adding a neighboring TIN to the Stars")
         maxid = max(self.stars)
         neighbor_start_id = maxid+1
-        precision = 3
-
-        for pt in self.points:
-            pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
-            if pt_str == '97178.883,440688.156':
-                log.debug(f"Found target vertex in self before add {pt_str}")
-            if pt_str == '96132.982,440270.000':
-                log.debug(f"Found source vertex in self before add {pt_str}")
-
-        for pt in neighbor.points:
-            pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
-            if pt_str == '97178.883,440688.156':
-                log.debug(f"Found target vertex in neighbor before add {pt_str}")
-            if pt_str == '96132.982,440270.000':
-                log.debug(f"Found source vertex in neighbor before add {pt_str}")
-
         self.points += neighbor.points
-
-        for pt in self.points:
-            pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
-            if pt_str == '97178.883,440688.156':
-                log.debug(f"Found target vertex after add {pt_str}")
-            if pt_str == '96132.982,440270.000':
-                log.debug(f"Found source vertex after add {pt_str}")
-
         stars_nbr = ((neighbor_start_id+star, [neighbor_start_id+v for v in link])
                      for star, link in neighbor.stars.items())
         self.stars.update(stars_nbr)
@@ -220,18 +197,16 @@ class Star(object):
         log.info(f"Removing duplicate points from the TIN. "
                  f"Precision is set to {precision} decimal digits")
         pt_hash_tbl = {}
+        z_differences = []
         for vtx2,pt in enumerate(self.points):
             pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
             # if co-located points found
-            if pt_str == '97178.883,440688.156':
-                log.debug(f"Found target vertex {pt_str}")
-            if pt_str == '96132.982,440270.000':
-                log.debug(f"Found source vertex {pt_str}")
             if pt_str not in pt_hash_tbl:
                 pt_hash_tbl[pt_str] = vtx2
             else:
                 vtx1 = pt_hash_tbl[pt_str]
                 _z = self.points[vtx1][2]
+                z_differences.append(abs(pt[2] - _z))
                 # average z in case of co-located points
                 new_z = (pt[2] + _z) / 2
                 # keep the point that was found first
@@ -282,6 +257,9 @@ class Star(object):
         # Replace the points and stars
         self.points = deepcopy(new_points)
         self.stars = deepcopy(new_stars)
+        log.info(f"Difference in z-values of co-located points in the two TINs: "
+                 f"min={min(z_differences)}, max={max(z_differences)}, "
+                 f"mean={mean(z_differences)}, variance={variance(z_differences)}")
         del new_stars, new_points, old_new_map
 
     def sew(self):
