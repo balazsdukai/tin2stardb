@@ -21,5 +21,6 @@ partitioning of an area. A tile has an index (or name), and an extent that is
 `./obj/base` : A simple rectangle with 4 vertices (the tile extent) was used as
     `input_polygons` for 3dfier.
 
-`./obj/densified_5m` : The tile extent was densified at 5m interval and used as
-    `input_polygons` for 3dfier.
+`./obj/densified_5m` : The tile extent was densified at 5m interval and used
+as `input_polygons` for 3dfier. The point cloud is not buffered, so it has
+the exact same extent as the tile.

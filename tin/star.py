@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 import re
 import random
-from typing import List, Tuple, Mapping
+from typing import Tuple, Mapping, Optional, Sequence, List
 from copy import deepcopy
 from statistics import mean, variance
 
@@ -24,8 +24,8 @@ log = logging.getLogger(__name__)
 class Star(object):
     """Main class for operating on a Star-TIN structure in memory."""
 
-    def __init__(self, points: List[Tuple[float, float, float]] = None,
-                 stars: Mapping[int, List[int, ...]] = None):
+    def __init__(self, points: Sequence[Tuple[float, float, float]] = None,
+                 stars: Mapping[int, Sequence[int, ...]] = None):
         self.stars = stars
         self.points = points
 
@@ -112,7 +112,7 @@ class Star(object):
         return tr
 
     def straight_walk(self, start: Tuple[float, float],
-                      dest: Tuple[float, float]) -> List[Tuple[int, int, int], ...]:
+                      dest: Tuple[float, float]) -> Sequence[Tuple[int, int, int], ...]:
         """Return a list of triangles along a straight line through the TIN.
 
         :param start: First point of the line, given as (x,y) coordinates
@@ -177,7 +177,7 @@ class Star(object):
                      for star, link in neighbor.stars.items())
         self.stars.update(stars_nbr)
 
-    def deduplicate(self, precision: int = 3) -> None:
+    def deduplicate(self, precision: int = 3, return_quality: bool = False) -> Tuple:
         """Remove duplicate points from a TIN.
 
         1) Combine the two TINs into a single Star
@@ -185,19 +185,25 @@ class Star(object):
             the precision as it is
         3) Create hash-table (dict) and keep track of the vertex indices,
             not loosing the duplicates
-        4) If two points are co-located, take their mean z-value as the new z
+        4) If two points are co-located, take their mean z coordinate as the new z
         5) Replace the duplicate with the original vertex
 
         .. note:: Ignores the z coordinate for determining point co-location.
 
         .. warning:: This operation modifies the TIN.
 
-        :return: None
+        :return: Tuple of None if return_quality is False; Else a tuple of:
+            1) The list of co-located points on the boundary of the two TINs.
+                The returned points are tuples of (x,y,z). The z coordinate is
+                the average of the z coordinates of the co-located points.
+            2) A tuple of (Minimum, Maximum, Mean, Variance) of the absolute
+                differences of the z coordinates of the co-located points.
         """
         log.info(f"Removing duplicate points from the TIN. "
                  f"Precision is set to {precision} decimal digits")
         pt_hash_tbl = {}
         z_differences = []
+        common_points = []
         for vtx2,pt in enumerate(self.points):
             pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
             # if co-located points found
@@ -211,6 +217,7 @@ class Star(object):
                 new_z = (pt[2] + _z) / 2
                 # keep the point that was found first
                 new_pt = (self.points[vtx1][0], self.points[vtx1][1], new_z)
+                common_points.append(new_pt)
                 self.points[vtx1] = new_pt
                 del _z, new_pt, new_z
                 # go through the stars and replace the references of vtx2 to
@@ -257,10 +264,20 @@ class Star(object):
         # Replace the points and stars
         self.points = deepcopy(new_points)
         self.stars = deepcopy(new_stars)
-        log.info(f"Difference in z-values of co-located points in the two TINs: "
-                 f"min={min(z_differences)}, max={max(z_differences)}, "
-                 f"mean={mean(z_differences)}, variance={variance(z_differences)}")
+        min_z = round(min(z_differences), 3)
+        max_z = round(max(z_differences), 3)
+        mean_z = round(mean(z_differences), 3)
+        variance_z = round(variance(z_differences), 3)
+        log.info(f"Difference in z coordinates of co-located points in the two TINs: "
+                 f"min={min_z}, "
+                 f"max={max_z}, "
+                 f"mean={mean_z}, "
+                 f"variance={variance_z}")
         del new_stars, new_points, old_new_map
+        if return_quality:
+            return common_points, (min_z, max_z, mean_z, variance_z)
+        else:
+            return None, None
 
     def sew(self):
         """.. todo:: Sew two TINs into a topologically valid TIN by traversing along a
@@ -279,19 +296,33 @@ class Star(object):
         """
 
     def merge(self, neighbor: Star, strategy: str='deduplicate',
-              precision: int=3) -> None:
+              precision: int=3, return_quality: bool = False) -> Optional[None, Tuple[List[Tuple[float], ...]], Tuple[float]]:
         """Merge a TIN into the current one.
 
         :param neighbor: An adjacent TIN in Star structure
         :param strategy: The strategy to use for merging. If *deduplicate*, then
             the two TINs are expected to touch, thus have a set of co-located
             points along the edge in which they are touching.
+        :param return_quality: If True, return a list common (co-located) points
+            (x,y,z) in the two TINs. The z coordinate of the coordinates is the
+            mean of the z coordinate of the two co-located points.
+        :return: None if return_quality is False; Else a tuple of:
+            1) The list of co-located points on the boundary of the two TINs.
+                The returned points are tuples of (x,y,z). The z coordinate is
+                the average of the z coordinates of the co-located points.
+            2) A tuple of (Minimum, Maximum, Mean, Variance) of the absolute
+                differences of the z coordinates of the co-located points.
         """
         # side, segment = utils.find_side(self.points[1:],
         #                                 neighbor.points[1:], abs_tol=0.1)
         if strategy.lower() == 'deduplicate':
             self.add(neighbor)
-            self.deduplicate(precision)
+            common_pts, quality = self.deduplicate(precision,
+                                          return_quality=return_quality)
+            if return_quality:
+                return common_pts, quality
+            else:
+                return None
         else:
             raise ValueError(f"Unknown merge strategy {strategy}")
 

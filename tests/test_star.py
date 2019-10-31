@@ -5,6 +5,7 @@
 import logging
 from math import isclose
 from statistics import mean
+import csv
 
 from tin import formats
 
@@ -61,6 +62,21 @@ class TestStar:
         obj_2 = formats.factory.create('objmem')
         obj_2.read(infile_2)
         obj.merge(obj_2, strategy='deduplicate', precision=3)
+        assert obj.is_valid()
+
+    def test_merge_return(self, obj_5m,data_dir):
+        infile = obj_5m / '37fz2_8.obj'
+        infile_2 = obj_5m / '37fz2_9.obj'
+        obj = formats.factory.create('objmem')
+        obj.read(infile)
+        obj_2 = formats.factory.create('objmem')
+        obj_2.read(infile_2)
+        common_pts = obj.merge(obj_2, strategy='deduplicate', precision=3,
+                               ret_common_pts=True)
+        with open(data_dir / '37fz2_8-9_merge_common-points-avg.csv', 'w') as fo:
+            pointwriter = csv.writer(fo, delimiter='\t')
+            for p in common_pts:
+                pointwriter.writerow(p)
         assert obj.is_valid()
 
     def test_is_valid(self, obj_base):
