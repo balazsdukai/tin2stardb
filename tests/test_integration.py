@@ -49,7 +49,7 @@ class TestIntegration:
             neighbor.read(obj_5m / neighbor_file)
             # Remember that Star.merge() adds the TIN to the current one
             cp,_qu = base_obj.merge(neighbor, strategy='deduplicate',
-                                precision=3, return_quality=True)
+                                    precision=3, return_quality=True)
             qu = [neighbor_file,]
             qu.extend(_qu)
             common_points.extend(cp)

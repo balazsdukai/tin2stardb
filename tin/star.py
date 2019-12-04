@@ -161,7 +161,7 @@ class Star(object):
             #print('tr', tr[0], tr[1], tr[2])
         return trail
 
-    def add(self, neighbor: Star) -> None:
+    def add(self, candidate: Star) -> None:
         """Adds a TIN into the current one by combining their Stars.
 
         .. warning:: This operation modifies the TIN.
@@ -171,22 +171,77 @@ class Star(object):
         """
         log.info("Adding a neighboring TIN to the Stars")
         maxid = max(self.stars)
-        neighbor_start_id = maxid+1
-        self.points += neighbor.points
-        stars_nbr = ((neighbor_start_id+star, [neighbor_start_id+v for v in link])
-                     for star, link in neighbor.stars.items())
+        candidate_start_id = maxid+1
+        self.points += candidate.points
+        stars_nbr = ((candidate_start_id+star, [candidate_start_id+v for v in link])
+                     for star, link in candidate.stars.items())
         self.stars.update(stars_nbr)
+
+    def find_duplicate_points(self, candidate: Star, precision: int = 3) -> List[int]:
+        """Finds the points that are duplicated in the candidate Star.
+
+        This function compares the points by casting their coordinates into
+        strings using the given precision. Comparison is done based on the
+        xy-coordinates only (not z).
+
+        :param candidate: A candidate Star structure which is compared to *this*
+            Star.
+        :param precision: The number of decimals to use for comparing
+            coordinates.
+        :returns: A list of point IDs from *this* Star, that have a co-located
+            pair in the candidate Star.
+        """
+        log.info(f"Precision is set to {precision} decimal digits")
+        duplicates = []
+        pt_hash_tbl_candidate = {}
+
+        for vtx,pt in enumerate(candidate.points):
+            pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
+            pt_hash_tbl_candidate[pt_str] = vtx
+
+        for vtx,pt in enumerate(self.points):
+            pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
+            if pt_str in pt_hash_tbl_candidate:
+                # co-located point found, so we store the vertex ID
+                duplicates.append(vtx)
+
+        return duplicates
+
+    def subset_without_reindex(self, vertices: List[int]) -> Tuple[Mapping, Mapping]:
+        """Get a subset of the TIN by passing in a list of vertex IDs.
+
+        The *seam* is the set of points along which two TINs are touching
+        (`vertices`). These points exist in both TINs. This function returns
+        the star and coordinates of `vertices`, *without* reindexing the vertex
+        IDs.
+
+        The *seam* is used in the streaming merge strategy, in which we need to
+        keep the seam in memory, while removing the rest of the base TIN.
+
+        .. note:: The function returns invalid stars, since the link of the
+            stars points to vertices that not present in the returned pointlist,
+            but only in the original Star. Also, the vertex IDs of the returned
+            stars refer to the ordering of the original Star's pointlist and
+            not to the returned pointlist.
+
+        :returns: A subset of the Star without reindexing the vertex IDs. The
+            subset is returned as a tuple of stars (dict) and coordinates
+            (vertex ID : coordinates).
+        """
+        subset_stars = {star:link for star,link in self.stars.items()
+                        if star in vertices}
+        subset_vtx = {vtx:self.points[vtx] for vtx in subset_stars.keys()}
+        return subset_stars, subset_vtx
 
     def deduplicate(self, precision: int = 3, return_quality: bool = False) -> Tuple:
         """Remove duplicate points from a TIN.
 
-        1) Combine the two TINs into a single Star
-        2) Cast vertices into strings using the given precision, or just keep
+        1) Cast vertices into strings using the given precision, or just keep
             the precision as it is
-        3) Create hash-table (dict) and keep track of the vertex indices,
+        2) Create hash-table (dict) and keep track of the vertex indices,
             not loosing the duplicates
-        4) If two points are co-located, take their mean z coordinate as the new z
-        5) Replace the duplicate with the original vertex
+        3) If two points are co-located, take their mean z coordinate as the new z
+        4) Replace the duplicate with the original vertex
 
         .. note:: Ignores the z coordinate for determining point co-location.
 
@@ -279,6 +334,10 @@ class Star(object):
         else:
             return None, None
 
+    def streaming_deduplicate(self):
+        """ """
+
+
     def sew(self):
         """.. todo:: Sew two TINs into a topologically valid TIN by traversing along a
                 straight line that is the where the two TINs touch.
@@ -295,11 +354,12 @@ class Star(object):
         topologically connected TIN.
         """
 
-    def merge(self, neighbor: Star, strategy: str='deduplicate',
-              precision: int=3, return_quality: bool = False) -> Optional[None, Tuple[List[Tuple[float], ...]], Tuple[float]]:
+    def merge(self, candidate: Star, strategy: str = 'deduplicate',
+              precision: int = 3, return_quality: bool = False) -> Optional[None, Tuple[List[Tuple[float], ...]], Tuple[float]]:
         """Merge a TIN into the current one.
 
-        :param neighbor: An adjacent TIN in Star structure
+        :param candidate: An adjacent TIN in Star structure that needs to be
+            merged into the current TIN.
         :param strategy: The strategy to use for merging. If *deduplicate*, then
             the two TINs are expected to touch, thus have a set of co-located
             points along the edge in which they are touching.
@@ -314,15 +374,21 @@ class Star(object):
                 differences of the z coordinates of the co-located points.
         """
         # side, segment = utils.find_side(self.points[1:],
-        #                                 neighbor.points[1:], abs_tol=0.1)
+        #                                 candidate.points[1:], abs_tol=0.1)
         if strategy.lower() == 'deduplicate':
-            self.add(neighbor)
+            self.add(candidate)
             common_pts, quality = self.deduplicate(precision,
                                           return_quality=return_quality)
             if return_quality:
                 return common_pts, quality
             else:
                 return None
+        elif strategy.lower() == 'streaming_deduplicate':
+            # Find duplicate points between the two TINs. The two TINs are
+            # expected to touch along these points.
+            duplicates = self.find_duplicate_points(candidate, precision=3)
+            #
+            subset_stars, subset_points = self.subset_without_reindex(duplicates)
         else:
             raise ValueError(f"Unknown merge strategy {strategy}")
 

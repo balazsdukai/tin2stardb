@@ -253,25 +253,51 @@ def subset_cmd(ctx, infile, outfile, bbox, bboxes):
 
 
 @click.command('merge')
-@click.argument('infiles', nargs=2)
+@click.argument('directory', type=click.Path(exists=True))
 @click.argument('outfile', type=str)
 @click.pass_context
-def merge_cmd(ctx, infiles, outfile):
-    """Merge two TINs in OBJ format."""
-    inpaths = []
-    for inf in infiles:
-        p = Path(inf).resolve()
-        if p.is_file():
-            inpaths.append(p)
-        else:
-            raise click.exceptions.FileError(f"{str(p)} is not a file")
-    outpath = Path(outfile).resolve()
-    base = formats.factory.create('objmem')
-    neighbor = formats.factory.create('objmem')
-    base.read(inpaths[0])
-    neighbor.read(inpaths[1])
-    base.merge(neighbor, strategy='deduplicate')
-    base.write(outpath)
+def merge_cmd(ctx, directory, outfile):
+    """Merge TINs in OBJ format.
+
+    DIRECTORY is the folder that contains the TINs to be merged. All .obj files
+    in this folder are merged together into a single file.
+
+    OUTFILE is the name of the output file. The OUTFILE is written into
+    DIRECTORY.
+    """
+    tin_paths = {}
+    dirpath = Path(directory).resolve()
+    if not dirpath.is_dir():
+        raise click.exceptions.ClickException(f"{dirpath} is not a directory")
+    for child in dirpath.iterdir():
+        if child.suffix == '.obj':
+            tin_paths[child] = None
+    if len(tin_paths) > 1:
+        click.echo(f"Found {len(tin_paths)} .obj files in {directory}")
+    else:
+        raise click.exceptions.ClickException(f"You need at least two .obj files in "
+                                         f"{dirpath} in order to merge them")
+    # Get the centroids of the TINs for ordering them
+    for filepath in tin_paths:
+        vertices = formats.OBJ.parse_vertices(filepath)
+        tin_paths[filepath] = utils.mean_coordinate(vertices)
+    del vertices
+
+    # write centroids for testing
+    ctr_path = dirpath / 'centroids.csv'
+    with ctr_path.open('w') as cout:
+        for p,ctr in tin_paths.items():
+            cout.write(f"{p}\t{ctr[0]}\t{ctr[1]}\n")
+
+    # Order the TINs in Morton-order
+
+    # outpath = Path(outfile).resolve()
+    # base = formats.factory.create('objmem')
+    # candidate = formats.factory.create('objmem')
+    # base.read(inpaths[0])
+    # candidate.read(inpaths[1])
+    # base.merge(candidate, strategy='deduplicate')
+    # base.write(outpath)
 
 
 main.add_command(import_cmd)

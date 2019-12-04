@@ -240,3 +240,14 @@ def plot_star(vid, stars, vertices):
                          xytext=(0, 10),
                          ha='center')
     plt.show()
+
+def mean_coordinate(points: Iterable[Tuple]) -> Tuple[float, float]:
+    """Compute the mean x- and y-coordinate from a list of points.
+
+    :param points: An iterable of coordinate tuples where the first two elements
+        of the tuple are the x- and y-coordinate respectively.
+    :returns: A tuple of (mean x, mean y) coordinates
+    """
+    mean_x = mean(pt[0] for pt in points)
+    mean_y = mean(pt[1] for pt in points)
+    return mean_x, mean_y

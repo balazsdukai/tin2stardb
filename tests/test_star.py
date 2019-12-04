@@ -11,11 +11,12 @@ from tin import formats
 
 log = logging.getLogger(__name__)
 
+
 class TestStar:
 
     def test_pointlocation(self, obj_base):
         infile = obj_base / '37fz2_9.obj'
-        point = (96663.12766666667, 439773.052) # centroid of a triangle
+        point = (96663.12766666667, 439773.052)  # centroid of a triangle
         obj = formats.factory.create('objmem')
         obj.read(infile)
         tri = obj.pointlocation(point)
@@ -43,16 +44,16 @@ class TestStar:
 
     def test_add(self, obj_5m):
         base = obj_5m / '37fz2_8.obj'
-        neighbor = obj_5m / '37fz2_9.obj'
+        candidate = obj_5m / '37fz2_9.obj'
         obj_base = formats.factory.create('objmem')
-        obj_neighbor = formats.factory.create('objmem')
+        obj_candidate = formats.factory.create('objmem')
         obj_base.read(base)
-        obj_neighbor.read(neighbor)
+        obj_candidate.read(candidate)
         base_pts = len(obj_base.points)
         base_stars = max(obj_base.stars)
-        obj_base.add(obj_neighbor)
-        assert base_pts + len(obj_neighbor.points) == len(obj_base.points)
-        assert len(obj_base.points) == max(obj_base.stars)+1
+        obj_base.add(obj_candidate)
+        assert base_pts + len(obj_candidate.points) == len(obj_base.points)
+        assert len(obj_base.points) == max(obj_base.stars) + 1
 
     def test_merge(self, obj_5m):
         infile = obj_5m / '37fz2_8.obj'
@@ -64,16 +65,16 @@ class TestStar:
         obj.merge(obj_2, strategy='deduplicate', precision=3)
         assert obj.is_valid()
 
-    def test_merge_return(self, obj_5m,data_dir):
+    def test_merge_return(self, obj_5m, data_dir):
         infile = obj_5m / '37fz2_8.obj'
         infile_2 = obj_5m / '37fz2_9.obj'
         obj = formats.factory.create('objmem')
         obj.read(infile)
         obj_2 = formats.factory.create('objmem')
         obj_2.read(infile_2)
-        common_pts = obj.merge(obj_2, strategy='deduplicate', precision=3,
-                               ret_common_pts=True)
-        with open(data_dir / '37fz2_8-9_merge_common-points-avg.csv', 'w') as fo:
+        common_pts = obj.merge(obj_2, strategy='deduplicate', precision=3)
+        with open(data_dir / '37fz2_8-9_merge_common-points-avg.csv',
+                  'w') as fo:
             pointwriter = csv.writer(fo, delimiter='\t')
             for p in common_pts:
                 pointwriter.writerow(p)
@@ -84,3 +85,4 @@ class TestStar:
         obj = formats.OBJMem()
         obj.read(infile)
         assert obj.is_valid()
+

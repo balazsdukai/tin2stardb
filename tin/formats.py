@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 import logging
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Iterable
 
 from tin.star import Star, StarDb
 from tin import utils
@@ -44,6 +44,26 @@ class FormatFactory:
 class OBJ(object):
 
     @staticmethod
+    def parse_vertices(path: Path) -> Iterable[Tuple[float, ...]]:
+        """Read the vertices from Wavefront OBJ.
+
+        :returns: A list of vertex tuples as (x,y,z)
+        """
+        log.info(f"Parsing {path}")
+        v_pat = re.compile(r"^v\s[\s\S]*")  # vertex
+        vertices = []
+
+        with path.open(mode='r') as f_in:
+            for line in f_in:
+                vertex = v_pat.match(line)
+                if vertex:
+                    # v has value like 'v 96126.383 440267.281 5.42\n'
+                    vertices.append(
+                        tuple(float(co) for co in vertex.group().strip().split()[1:])
+                    )
+        return vertices
+
+    @staticmethod
     def parse_obj(path: str, bbox: Tuple[float, float, float, float] = None):
         """Import from Wavefront OBJ.
 
@@ -59,7 +79,7 @@ class OBJ(object):
         :param path: Path to the OBJ file
         :param bbox: If Bounding Box is provided as (minx, miny, maxx, maxy),
             only the triangles that are within the BBOX are parsed.
-        :return: (vertex list, adjacency table)
+        :returns: (vertex list, adjacency table)
         """
         log.info(f"Parsing {path}")
         v_pat = re.compile(r"^v\s[\s\S]*")  # vertex
@@ -71,18 +91,18 @@ class OBJ(object):
             log.info(f"Using BBOX {bbox} for subset")
         with open(path, 'r') as f_in:
             for line in f_in:
-                v = v_pat.match(line)
-                f = f_pat.match(line)
-                if v:
+                vertex = v_pat.match(line)
+                face = f_pat.match(line)
+                if vertex:
                     # v has value like 'v 96126.383 440267.281 5.42\n'
                     vertices.append(
-                        tuple(float(co) for co in v.group().strip().split()[1:])
+                        tuple(float(co) for co in vertex.group().strip().split()[1:])
                     )
-                elif f:
+                elif face:
                     # This software uses a 0-based index, so the OBJ input
                     # is changed to a 0-based too.
                     # f has value like 'f 1 2 3\n'
-                    tri = [int(tid)-1 for tid in f.group().strip().split()[1:]]
+                    tri = [int(tid)-1 for tid in face.group().strip().split()[1:]]
                     if bbox:
                         tri_deref = tuple(vertices[vid] for vid in tri)
                         if not utils.in_bbox(tri_deref, bbox):
