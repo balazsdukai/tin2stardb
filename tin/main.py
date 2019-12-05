@@ -265,31 +265,67 @@ def merge_cmd(ctx, directory, outfile):
     OUTFILE is the name of the output file. The OUTFILE is written into
     DIRECTORY.
     """
-    tin_paths = {}
+    log = ctx.obj['log']
+    tin_paths = {} # Will store (morton code : file path)
     dirpath = Path(directory).resolve()
+    outpath = Path(outfile).resolve()
+
     if not dirpath.is_dir():
         raise click.exceptions.ClickException(f"{dirpath} is not a directory")
     for child in dirpath.iterdir():
         if child.suffix == '.obj':
-            tin_paths[child] = None
+            vertices = formats.OBJ.parse_vertices(child)
+            log.debug(f"Computing TIN centroids and Morton-key")
+            center = utils.mean_coordinate(vertices)
+            morton_key = utils.morton_code(*center)
+            tin_paths[morton_key] = Path(child)
+    del vertices
     if len(tin_paths) > 1:
         click.echo(f"Found {len(tin_paths)} .obj files in {directory}")
     else:
-        raise click.exceptions.ClickException(f"You need at least two .obj files in "
-                                         f"{dirpath} in order to merge them")
-    # Get the centroids of the TINs for ordering them
-    for filepath in tin_paths:
-        vertices = formats.OBJ.parse_vertices(filepath)
-        tin_paths[filepath] = utils.mean_coordinate(vertices)
-    del vertices
+        raise click.exceptions.ClickException(
+            f"You need at least two .obj files in "
+            f"{dirpath} in order to merge them")
 
     # write centroids for testing
+    log.debug("Writing centroids")
     ctr_path = dirpath / 'centroids.csv'
     with ctr_path.open('w') as cout:
-        for p,ctr in tin_paths.items():
-            cout.write(f"{p}\t{ctr[0]}\t{ctr[1]}\n")
+        for i,morton_key in enumerate(sorted(tin_paths)):
+            path = tin_paths[morton_key]
+            x,y = utils.rev_morton_code(morton_key)
+            cout.write(f"{i}\t{path.name}\t{x}\t{y}\n")
 
-    # Order the TINs in Morton-order
+    # Loop through the TINs in Morton-order
+    morton_order = sorted(tin_paths)
+    for i in range(len(morton_order)):
+        base_key = morton_order[i]
+        try:
+            candidate_key = morton_order[i+1]
+        except IndexError:
+            # Reached the last TIN
+            candidate_key = None
+        base_path = tin_paths[base_key]
+        log.debug(f"Processing base={base_path.name}")
+        base = formats.factory.create('objmem')
+        base.read(base_path)
+        if candidate_key:
+            candidate_path = tin_paths[candidate_key]
+            log.debug(f"Processing candidate={candidate_path.name}")
+            candidate = formats.factory.create('objmem')
+            candidate.read(candidate_path)
+            # The two TINs (base, candidate) are expected to touch along some
+            # path, which we call *seam*. Find the points of the seam.
+            duplicates = base.find_duplicate_points(candidate)
+            # Extract the stars of the seam from the base
+            seam = base.get_seam(duplicates)
+            # Add the seam to the candidate
+            base_maxid = max(base.stars)
+            # Remove the seam from the base
+
+        # We only write out the base
+        base.write_star(outpath, mode='a')
+
 
     # outpath = Path(outfile).resolve()
     # base = formats.factory.create('objmem')

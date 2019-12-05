@@ -86,3 +86,41 @@ class TestStar:
         obj.read(infile)
         assert obj.is_valid()
 
+    def test_find_duplicate_points(self, obj_5m):
+        infile = obj_5m / '37fz2_8.obj'
+        infile_2 = obj_5m / '37fz2_9.obj'
+        obj = formats.factory.create('objmem')
+        obj.read(infile)
+        obj_2 = formats.factory.create('objmem')
+        obj_2.read(infile_2)
+        duplicates = obj.find_duplicate_points(obj_2, precision=3)
+        #TODO: better assertion could be done here
+        assert len(duplicates) > 0
+
+    def test_get_seam(self, obj_5m):
+        infile = obj_5m / '37fz2_8.obj'
+        infile_2 = obj_5m / '37fz2_9.obj'
+        obj = formats.factory.create('objmem')
+        obj.read(infile)
+        obj_2 = formats.factory.create('objmem')
+        obj_2.read(infile_2)
+        duplicates = obj.find_duplicate_points(obj_2, precision=3)
+        seam = obj.get_seam(duplicates)
+        assert len(seam[0]) == len(seam[1])
+
+    def test_add_seam(self, obj_5m):
+        infile = obj_5m / '37fz2_8.obj'
+        infile_2 = obj_5m / '37fz2_9.obj'
+        obj = formats.factory.create('objmem')
+        obj.read(infile)
+        obj_2 = formats.factory.create('objmem')
+        obj_2.read(infile_2)
+        duplicates = obj.find_duplicate_points(obj_2, precision=3)
+        seam = obj.get_seam(duplicates)
+        maxid = max(obj.stars)
+        candidate_stars = len(obj_2.stars)
+        candidate_pts = len(obj_2.points)
+        obj_2.add_seam(start_id=maxid, seam=seam)
+        assert len(obj_2.stars) == len(seam[0]) + candidate_stars
+        assert len(obj_2.points_dict) == len(seam[1]) + candidate_pts
+

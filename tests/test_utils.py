@@ -79,3 +79,21 @@ class TestSide:
         neighbor = [(96123.0, 439110.0), (97246.0, 439110.0), (97246.0, 440269.969), (96123.0, 440269.969)]
         side, segment = utils.find_side(base, neighbor, abs_tol=0.1)
         assert side == 'S'
+
+class TestSorting:
+    @pytest.mark.parametrize('point', [
+        (0, 0),
+        (0.0, 0.0),
+        (1.0, 1.0),
+        (96663.25590546813, 439718.94288361823),
+        (252914.232, 608211.603)
+    ])
+    def test_morton_code(self, point):
+        utils.morton_code(*point)
+
+    def test_rev_morton_code(self):
+        point = (252914.232, 608211.603)
+        morton_key = utils.morton_code(*point)
+        point_res = utils.rev_morton_code(morton_key)
+        assert pytest.approx(point[0], point_res[0]) and \
+               pytest.approx(point[1], point_res[1])

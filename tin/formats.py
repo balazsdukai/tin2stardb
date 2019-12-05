@@ -49,7 +49,7 @@ class OBJ(object):
 
         :returns: A list of vertex tuples as (x,y,z)
         """
-        log.info(f"Parsing {path}")
+        log.info(f"Reading vertices from {path}")
         v_pat = re.compile(r"^v\s[\s\S]*")  # vertex
         vertices = []
 

@@ -4,7 +4,7 @@
 
 import math
 from statistics import mean
-from typing import Tuple, Union, Iterable, Generator
+from typing import Tuple, Union, Iterable, Generator, Mapping
 import logging
 
 MODULE_MATPLOTLIB_AVAILABLE = True
@@ -241,6 +241,7 @@ def plot_star(vid, stars, vertices):
                          ha='center')
     plt.show()
 
+
 def mean_coordinate(points: Iterable[Tuple]) -> Tuple[float, float]:
     """Compute the mean x- and y-coordinate from a list of points.
 
@@ -251,3 +252,60 @@ def mean_coordinate(points: Iterable[Tuple]) -> Tuple[float, float]:
     mean_x = mean(pt[0] for pt in points)
     mean_y = mean(pt[1] for pt in points)
     return mean_x, mean_y
+
+"""
+Computing Morton-code. Reference: https://github.com/trevorprater/pymorton
+"""
+def __part1by1_64(n):
+    """64-bit mask"""
+    n &= 0x00000000ffffffff                  # binary: 11111111111111111111111111111111,                                len: 32
+    n = (n | (n << 16)) & 0x0000FFFF0000FFFF # binary: 1111111111111111000000001111111111111111,                        len: 40
+    n = (n | (n << 8))  & 0x00FF00FF00FF00FF # binary: 11111111000000001111111100000000111111110000000011111111,        len: 56
+    n = (n | (n << 4))  & 0x0F0F0F0F0F0F0F0F # binary: 111100001111000011110000111100001111000011110000111100001111,    len: 60
+    n = (n | (n << 2))  & 0x3333333333333333 # binary: 11001100110011001100110011001100110011001100110011001100110011,  len: 62
+    n = (n | (n << 1))  & 0x5555555555555555 # binary: 101010101010101010101010101010101010101010101010101010101010101, len: 63
+
+    return n
+
+
+def __unpart1by1_64(n):
+    n &= 0x5555555555555555                  # binary: 101010101010101010101010101010101010101010101010101010101010101, len: 63
+    n = (n ^ (n >> 1))  & 0x3333333333333333 # binary: 11001100110011001100110011001100110011001100110011001100110011,  len: 62
+    n = (n ^ (n >> 2))  & 0x0f0f0f0f0f0f0f0f # binary: 111100001111000011110000111100001111000011110000111100001111,    len: 60
+    n = (n ^ (n >> 4))  & 0x00ff00ff00ff00ff # binary: 11111111000000001111111100000000111111110000000011111111,        len: 56
+    n = (n ^ (n >> 8))  & 0x0000ffff0000ffff # binary: 1111111111111111000000001111111111111111,                        len: 40
+    n = (n ^ (n >> 16)) & 0x00000000ffffffff # binary: 11111111111111111111111111111111,                                len: 32
+    return n
+
+
+def interleave(*args):
+    """Interleave two integers"""
+    if len(args) != 2:
+        raise ValueError('Usage: interleave2(x, y)')
+    for arg in args:
+        if not isinstance(arg, int):
+            print('Usage: interleave2(x, y)')
+            raise ValueError("Supplied arguments contain a non-integer!")
+
+    return __part1by1_64(args[0]) | (__part1by1_64(args[1]) << 1)
+
+
+def deinterleave(n):
+    if not isinstance(n, int):
+        print('Usage: deinterleave2(n)')
+        raise ValueError("Supplied arguments contain a non-integer!")
+
+    return __unpart1by1_64(n), __unpart1by1_64(n >> 1)
+
+
+def morton_code(x: float, y: float):
+    """Takes an (x,y) coordinate tuple and computes their Morton-key.
+
+    Casts float to integers by multiplying them with 100 (millimeter precision).
+    """
+    return interleave(int(x * 100), int(y * 100))
+
+def rev_morton_code(morton_key: int) -> Tuple[float, float]:
+    """Get the coordinates from a Morton-key"""
+    x,y = deinterleave(morton_key)
+    return float(x)/100.0, float(y)/100.0

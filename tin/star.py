@@ -9,6 +9,7 @@ import random
 from typing import Tuple, Mapping, Optional, Sequence, List
 from copy import deepcopy
 from statistics import mean, variance
+from pathlib import Path
 
 from psycopg2 import extras, errors
 import fiona
@@ -25,9 +26,11 @@ class Star(object):
     """Main class for operating on a Star-TIN structure in memory."""
 
     def __init__(self, points: Sequence[Tuple[float, float, float]] = None,
-                 stars: Mapping[int, Sequence[int, ...]] = None):
+                 stars: Mapping[int, Sequence[int, ...]] = None,
+                 points_dict = None):
         self.stars = stars
         self.points = points
+        self.points_dict = points_dict
 
     def triangles(self):
         """Generate triangles from the stars.
@@ -177,6 +180,25 @@ class Star(object):
                      for star, link in candidate.stars.items())
         self.stars.update(stars_nbr)
 
+    def add_seam(self, start_id: int, seam: Tuple) -> None:
+        """Adds the seam to the Star.
+
+        See :py:meth:`~.Star.get_seam` for an explanation on the *seam*.
+        """
+        seam_stars,seam_points = seam
+        new_start_id = start_id+1
+        stars_new = {new_start_id+star: [new_start_id+v for v in link]
+                     for star,link in self.stars.items()}
+        self.stars = stars_new
+        # add the stars from the seam
+        self.stars.update(seam_stars)
+        # add the points from the seam
+        self.points_dict = deepcopy(seam_points)
+        points_new = ((new_start_id+i, vtx)
+                      for i,vtx in enumerate(self.points))
+        self.points_dict.update(points_new)
+        del self.points
+
     def find_duplicate_points(self, candidate: Star, precision: int = 3) -> List[int]:
         """Finds the points that are duplicated in the candidate Star.
 
@@ -207,7 +229,7 @@ class Star(object):
 
         return duplicates
 
-    def subset_without_reindex(self, vertices: List[int]) -> Tuple[Mapping, Mapping]:
+    def get_seam(self, vertices: List[int]) -> Tuple[Mapping, Mapping]:
         """Get a subset of the TIN by passing in a list of vertex IDs.
 
         The *seam* is the set of points along which two TINs are touching
@@ -388,7 +410,7 @@ class Star(object):
             # expected to touch along these points.
             duplicates = self.find_duplicate_points(candidate, precision=3)
             #
-            subset_stars, subset_points = self.subset_without_reindex(duplicates)
+            subset_stars, subset_points = self.get_seam(duplicates)
         else:
             raise ValueError(f"Unknown merge strategy {strategy}")
 
@@ -420,6 +442,25 @@ class Star(object):
         tris_cons = all(consistent for tri, consistent in tris)
         # TODO: include tris_cons in return
         return consistent and ccw
+
+    def write_star(self, path: Path, mode='a'):
+        """Write the Star directly to a file.
+
+        The output format is:
+            s star_ID link_ID1 ...
+            v x-coordinate y-coordinate z-coordinate
+
+        Thus the format is similar to Wavefront OBJ, but in this case the
+        rows beginning with `s` denote a *star*. In a *star* the `star_` and
+        `link_` IDs are the 0-based vertex IDs. The rows beginning with `v`
+        denote the vertex coordinates, just like in OBJ.
+        """
+        log.info(f"Writing Star to {path} in mode={mode}")
+        with path.open(mode=mode) as fout:
+            for star,link in self.stars.items():
+                fout.write(f"s {star} {' '.join(str(i) for i in link)}\n")
+            for vtx in self.points:
+                fout.write(f"v {' '.join(str(i) for i in vtx)}\n")
 
 
 class StarDb(object):
