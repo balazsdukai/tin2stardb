@@ -16,12 +16,11 @@ except ImportError as e:
 log = logging.getLogger(__name__)
 
 
-def _ccw(vertices, star, link):
+def __ccw__(vertices, star, link):
     """Sort the link in CounterClockWise order around the star"""
-    x, y, z = [0, 1, 2]
+    x, y, z = 0, 1, 2
     localized = [(vertices[v][x] - vertices[star][x],
-                  vertices[v][y] - vertices[star][y]) for v in
-                 link]
+                  vertices[v][y] - vertices[star][y]) for v in link]
     rev_lookup = {localized[i]: a for i, a in enumerate(link)}
     return rev_lookup, sorted(localized, key=lambda p: math.atan2(p[1], p[0]))
 
@@ -29,14 +28,14 @@ def _ccw(vertices, star, link):
 def sort_ccw(vertices, stars) -> Generator:
     """Sort vertices in counter-clockwise order."""
     for star, link in stars.items():
-        rev_lookup, ccw = _ccw(vertices, star, link)
+        rev_lookup, ccw = __ccw__(vertices, star, link)
         yield star, [rev_lookup[co] for co in ccw]
 
 
 def link_is_ccw(vertices, stars) -> Generator:
     """Check if the link of the star is ordered CounterClockWise."""
     for star, link in stars.items():
-        rev_lookup, ccw = _ccw(vertices, star, link)
+        rev_lookup, ccw = __ccw__(vertices, star, link)
         yield star, all(rev_lookup[co]==link[i] for i,co in enumerate(ccw))
 
 

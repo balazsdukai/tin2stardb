@@ -323,6 +323,14 @@ def merge_cmd(ctx, directory, outfile):
             base_maxid = max(base.stars)
             # Remove the seam from the base
 
+            # --- Alternatively
+            # When the duplicate point-pair is found, the two stars are evaluated immediately
+            #   The two stars are combined by adding the link from the Base to the link of the Candidate, thus the star of the Candidate becomes the new star
+            #   The combined link is sorted in ccw, since we still have all the vertices in memory all the vertex indices are valid in both the Base and Candidate
+            #   The duplicate points are removed from the Base, the vertex indices are updated, the stars are removed and the Base links are updated to include the stars from the Candidate
+            # Remove Base from memory
+            # Set Candidate as Base
+
         # We only write out the base
         base.write_star(outpath, mode='a')
 

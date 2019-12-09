@@ -40,6 +40,17 @@ class TestCCW:
             # check for duplicates in the star
             assert len(star) == len(set(star))
 
+    def test_sort_ccw_dict(self, obj_base):
+        """Test when the vertices are stored in a dict instead of a list."""
+        infile = obj_base / '37fz2_9.obj'
+        obj = formats.OBJMem()
+        _v, adjacency_table = obj.parse_obj(infile)
+        vertices = {i: pt for i, pt in enumerate(_v)}
+        stars = utils.sort_ccw(vertices, adjacency_table)
+        for vid, star in stars:
+            # check for duplicates in the star
+            assert len(star) == len(set(star))
+
     def test_link_is_ccw(self, obj_base):
         infile = obj_base / '37fz2_9.obj'
         obj = formats.OBJMem()

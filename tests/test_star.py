@@ -55,6 +55,43 @@ class TestStar:
         assert base_pts + len(obj_candidate.points) == len(obj_base.points)
         assert len(obj_base.points) == max(obj_base.stars) + 1
 
+    def test_reindex(self, obj_5m):
+        base = obj_5m / '37fz2_8.obj'
+        obj_base = formats.factory.create('objmem')
+        obj_base.read(base)
+        base_pts = max(obj_base.stars)
+        obj_base.reindex(start_id=base_pts)
+        assert all(base_pts < v for v in obj_base.stars)
+
+    def test_deduplicate_candidate(self, obj_5m):
+        """Test deduplication on the candidate TIN.
+        """
+        def __point_id_is_sequential(points):
+            start_id = min(points)
+            for v in sorted(points):
+                yield v == start_id
+                start_id += 1
+
+        base = obj_5m / '37fz2_8.obj'
+        candidate = obj_5m / '37fz2_9.obj'
+        obj_base = formats.factory.create('objmem')
+        obj_candidate = formats.factory.create('objmem')
+        obj_base.read(base)
+        obj_candidate.read(candidate)
+        base_pts = len(obj_base.points)
+        base_stars = max(obj_base.stars)
+        obj_candidate.reindex(base_stars)
+        obj_base.deduplicate(obj_candidate, precision=3)
+        # Expect that the candidate is reindexed so that the indices start
+        # where the base indices end
+        assert max(obj_base.stars) + 1 == min(obj_candidate.stars)
+        # Expect that there is a 1-to-1 mapping between the points and the stars
+        assert obj_base.stars.keys().isdisjoint(obj_base.points.keys()) is False
+        assert obj_candidate.stars.keys().isdisjoint(obj_candidate.points.keys()) is False
+        # Expect that the point indices are sequentially increment by 1
+        assert all(__point_id_is_sequential(obj_base.points))
+        assert all(__point_id_is_sequential(obj_candidate.points))
+
     def test_merge(self, obj_5m):
         infile = obj_5m / '37fz2_8.obj'
         infile_2 = obj_5m / '37fz2_9.obj'
