@@ -529,7 +529,7 @@ class Star(object):
             variance_z = round(variance(z_differences), 3)
             log.info(
                 f"Difference in z coordinates of co-located points in the two TINs: "
-                f"nr_points={len(z_differences)}"
+                f"nr_points={len(z_differences)} "
                 f"min={min_z}, "
                 f"max={max_z}, "
                 f"mean={mean_z}, "
@@ -583,7 +583,7 @@ class Star(object):
         #                                 candidate.points[1:], abs_tol=0.1)
         if strategy.lower() == 'deduplicate':
             self.add(candidate)
-            common_pts, quality = self.deduplicate(precision,
+            common_pts, quality = self.deduplicate(precision=precision,
                                           return_quality=return_quality)
             if return_quality:
                 return common_pts, quality

@@ -255,8 +255,9 @@ def subset_cmd(ctx, infile, outfile, bbox, bboxes):
 @click.command('merge')
 @click.argument('directory', type=click.Path(exists=True))
 @click.argument('outfile', type=str)
+@click.option('--in_memory', is_flag=True)
 @click.pass_context
-def merge_cmd(ctx, directory, outfile):
+def merge_cmd(ctx, directory, outfile, in_memory):
     """Merge TINs in OBJ format.
 
     DIRECTORY is the folder that contains the TINs to be merged. All .obj files
@@ -269,6 +270,7 @@ def merge_cmd(ctx, directory, outfile):
     tin_paths = {} # Will store (morton code : file path)
     dirpath = Path(directory).resolve()
     outpath = Path(outfile).resolve()
+    del outfile
 
     if not dirpath.is_dir():
         raise click.exceptions.ClickException(f"{dirpath} is not a directory")
@@ -317,20 +319,26 @@ def merge_cmd(ctx, directory, outfile):
             candidate = formats.factory.create('objmem')
             candidate.read(candidate_path)
 
-            start_id = max(base.stars)
-            # Reindex the candidate so that the point indices begin after
-            # the base
-            candidate.reindex(start_id=start_id)
-            # Remove the co-located points from the candidate, merge the
-            # stars of the co-located points and keep these stars only in the
-            # base
-            base.deduplicate(candidate=candidate, precision=3)
+            if in_memory:
+                base.merge(candidate, strategy='deduplicate', precision=3)
+            else:
+                start_id = max(base.stars)
+                # Reindex the candidate so that the point indices begin after
+                # the base
+                candidate.reindex(start_id=start_id)
+                # Remove the co-located points from the candidate, merge the
+                # stars of the co-located points and keep these stars only in the
+                # base
+                base.deduplicate(candidate=candidate, precision=3)
 
-        # We only write out the base
-        base.pickle_star((dirpath / base.name).with_suffix('.pickle'))
-        base.write_star(outpath, mode='a')
-        # The candidate becomes the base
-        base = candidate
+        if not in_memory:
+            # We only write out the base
+            base.pickle_star((dirpath / base.name).with_suffix('.pickle'))
+            base.write_star(outpath, mode='a')
+            # The candidate becomes the base
+            base = candidate
+    if in_memory:
+        base.write(outpath)
 
 
 main.add_command(import_cmd)
