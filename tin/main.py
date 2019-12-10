@@ -298,6 +298,7 @@ def merge_cmd(ctx, directory, outfile):
 
     # Loop through the TINs in Morton-order
     morton_order = sorted(tin_paths)
+    base = None
     for i in range(len(morton_order)):
         base_key = morton_order[i]
         try:
@@ -306,42 +307,30 @@ def merge_cmd(ctx, directory, outfile):
             # Reached the last TIN
             candidate_key = None
         base_path = tin_paths[base_key]
-        log.debug(f"Processing base={base_path.name}")
-        base = formats.factory.create('objmem')
-        base.read(base_path)
+        log.debug(f"Base={base_path.name}")
+        if base is None:
+            base = formats.factory.create('objmem')
+            base.read(base_path)
         if candidate_key:
             candidate_path = tin_paths[candidate_key]
-            log.debug(f"Processing candidate={candidate_path.name}")
+            log.debug(f"Candidate={candidate_path.name}")
             candidate = formats.factory.create('objmem')
             candidate.read(candidate_path)
-            # The two TINs (base, candidate) are expected to touch along some
-            # path, which we call *seam*. Find the points of the seam.
-            duplicates = base.find_duplicate_points(candidate)
-            # Extract the stars of the seam from the base
-            seam = base.get_seam(duplicates)
-            # Add the seam to the candidate
-            base_maxid = max(base.stars)
-            # Remove the seam from the base
 
-            # --- Alternatively
-            # When the duplicate point-pair is found, the two stars are evaluated immediately
-            #   The two stars are combined by adding the link from the Base to the link of the Candidate, thus the star of the Candidate becomes the new star
-            #   The combined link is sorted in ccw, since we still have all the vertices in memory all the vertex indices are valid in both the Base and Candidate
-            #   The duplicate points are removed from the Base, the vertex indices are updated, the stars are removed and the Base links are updated to include the stars from the Candidate
-            # Remove Base from memory
-            # Set Candidate as Base
+            start_id = max(base.stars)
+            # Reindex the candidate so that the point indices begin after
+            # the base
+            candidate.reindex(start_id=start_id)
+            # Remove the co-located points from the candidate, merge the
+            # stars of the co-located points and keep these stars only in the
+            # base
+            base.deduplicate(candidate=candidate, precision=3)
 
         # We only write out the base
+        base.pickle_star((dirpath / base.name).with_suffix('.pickle'))
         base.write_star(outpath, mode='a')
-
-
-    # outpath = Path(outfile).resolve()
-    # base = formats.factory.create('objmem')
-    # candidate = formats.factory.create('objmem')
-    # base.read(inpaths[0])
-    # candidate.read(inpaths[1])
-    # base.merge(candidate, strategy='deduplicate')
-    # base.write(outpath)
+        # The candidate becomes the base
+        base = candidate
 
 
 main.add_command(import_cmd)

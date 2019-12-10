@@ -64,7 +64,7 @@ class OBJ(object):
         return vertices
 
     @staticmethod
-    def parse_obj(path: str, bbox: Tuple[float, float, float, float] = None):
+    def parse_obj(path: Path, bbox: Tuple[float, float, float, float] = None):
         """Import from Wavefront OBJ.
 
         Returns a list of vertices and an adjacency table. The adjacency table
@@ -89,7 +89,7 @@ class OBJ(object):
 
         if bbox:
             log.info(f"Using BBOX {bbox} for subset")
-        with open(path, 'r') as f_in:
+        with path.open(mode='r') as f_in:
             for line in f_in:
                 vertex = v_pat.match(line)
                 face = f_pat.match(line)
@@ -132,7 +132,7 @@ class OBJ(object):
 
 class OBJMem(OBJ, Star):
 
-    def read(self, path: str, bbox: Tuple[float] = None) -> None:
+    def read(self, path: Path, bbox: Tuple[float] = None) -> None:
         """Read an OBJ into a Star-structure in memory.
 
         :param path:
@@ -140,6 +140,7 @@ class OBJMem(OBJ, Star):
         """
         self.points, adjacency_table = self.parse_obj(path, bbox=bbox)
         self.stars = dict(utils.sort_ccw(self.points, adjacency_table))
+        self.name = path.stem
 
     def write(self, path: Path) -> None:
         """Write to Wavefront OBJ.

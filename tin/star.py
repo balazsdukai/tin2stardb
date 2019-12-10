@@ -10,6 +10,7 @@ from typing import Tuple, Mapping, Optional, Sequence, List
 from copy import deepcopy
 from statistics import mean, variance
 from pathlib import Path
+import pickle
 
 from psycopg2 import extras, errors
 import fiona
@@ -27,10 +28,11 @@ class Star(object):
 
     def __init__(self, points: Sequence[Tuple[float, float, float]] = None,
                  stars: Mapping[int, Sequence[int, ...]] = None,
-                 points_dict = None):
+                 points_dict = None, name=None):
         self.stars = stars
         self.points = points
         self.points_dict = points_dict
+        self.name = name
 
     def triangles(self):
         """Generate triangles from the stars.
@@ -391,7 +393,7 @@ class Star(object):
                 del newpts
             log.debug("Modifying base and candidate")
             if not self.stars.keys().isdisjoint(candidate.stars.keys()):
-                raise ValueError("Base and candidate cannot have common vertex indices.")
+                raise ValueError(f"Base {self.name} and candidate {candidate.name} cannot have common vertex indices.")
             pt_hash_tbl_candidate = {}
             updated_stars_base = []
 
@@ -453,13 +455,29 @@ class Star(object):
                         if v in candidate.points:
                             combined_points[v] = candidate.points[v]
                     combined_points[star_candidate] = candidate.points[star_candidate]
-                    # Sort the link ccw
-                    _d = dict(utils.sort_ccw(combined_points, {star_base: link_base}))
-                    # Update the link of star_base with the merged link of base+candidate
-                    self.stars[star_base] = _d[star_base]
+                    # FIXME: This is a quickfix for
+                    #  7751d13f1d6171d6a79e22fe7eded06176e491d6 so that the
+                    #  process runs through. Encountered a reference in a link
+                    #  to a missing point (58233) in tile 37fz2_13 when merging
+                    #  with 37fz2_12. The missing point is part of 37fz2_7,
+                    #  but this tile is not in memory.
+                    try:
+                        # Sort the link ccw
+                        _d = dict(utils.sort_ccw(combined_points, {star_base: link_base}))
+                        # Update the link of star_base with the merged link of base+candidate
+                        self.stars[star_base] = _d[star_base]
+                        del _d
+                    except KeyError:
+                        log.error("Encountered missing point in sort_ccw()")
+                        self.stars[star_base] = link_base
                     # Delete candidate star and point
                     candidate.points[star_candidate] = None
-                    del candidate.stars[star_candidate], _d
+                    del candidate.stars[star_candidate]
+
+            if len(updated_stars_base) == 0:
+                log.warning(f"Did not find any co-located points in base {self.name} and candidate {candidate.name}")
+                return None, None
+
             del star_base, pt, star_candidate, pt_hash_tbl_candidate, pt_hash_tbl_base
             # Create a new points list, excluding the deleted points and create a
             # mapping of the old-new vertices
@@ -497,19 +515,25 @@ class Star(object):
                             self.stars[star_base][i] = old_new_map[vtx]
                         except ValueError:
                             pass
-
-        # Compute the quality of the TIN merge
-        min_z = round(min(z_differences), 3)
-        max_z = round(max(z_differences), 3)
-        mean_z = round(mean(z_differences), 3)
-        variance_z = round(variance(z_differences), 3)
-        log.info(
-            f"Difference in z coordinates of co-located points in the two TINs: "
-            f"min={min_z}, "
-            f"max={max_z}, "
-            f"mean={mean_z}, "
-            f"variance={variance_z}")
         del old_new_map
+        # TODO: need to update the global max_id
+
+        if len(z_differences) < 2:
+            return_quality = False
+            log.warning("Only 1 co-located point were found. Cannot compute merge quality")
+        else:
+            # Compute the quality of the TIN merge
+            min_z = round(min(z_differences), 3)
+            max_z = round(max(z_differences), 3)
+            mean_z = round(mean(z_differences), 3)
+            variance_z = round(variance(z_differences), 3)
+            log.info(
+                f"Difference in z coordinates of co-located points in the two TINs: "
+                f"nr_points={len(z_differences)}"
+                f"min={min_z}, "
+                f"max={max_z}, "
+                f"mean={mean_z}, "
+                f"variance={variance_z}")
         if return_quality:
             return common_points, (min_z, max_z, mean_z, variance_z)
         else:
@@ -604,11 +628,11 @@ class Star(object):
         return consistent and ccw
 
     def write_star(self, path: Path, mode='a'):
-        """Write the Star directly to a file.
+        """Write the Star to a file, conserving its structure.
 
         The output format is:
             s star_ID link_ID1 ...
-            v x-coordinate y-coordinate z-coordinate
+            v point_ID x-coordinate y-coordinate z-coordinate
 
         Thus the format is similar to Wavefront OBJ, but in this case the
         rows beginning with `s` denote a *star*. In a *star* the `star_` and
@@ -619,8 +643,17 @@ class Star(object):
         with path.open(mode=mode) as fout:
             for star,link in self.stars.items():
                 fout.write(f"s {star} {' '.join(str(i) for i in link)}\n")
-            for vtx in self.points:
-                fout.write(f"v {' '.join(str(i) for i in vtx)}\n")
+            for id,vtx in self.points.items():
+                fout.write(f"v {id} {' '.join(str(i) for i in vtx)}\n")
+
+    def pickle_star(self, path: Path):
+        """Pickle the Star and write it to a file."""
+        log.info(f"Pickling Star to {path}")
+        with path.open(mode='wb') as fout:
+            try:
+                pickle.dump(self, fout, protocol=pickle.HIGHEST_PROTOCOL)
+            except pickle.PicklingError as e:
+                log.error(f"Cannot pickle the Star instance. Error:\n{e}")
 
 
 class StarDb(object):
