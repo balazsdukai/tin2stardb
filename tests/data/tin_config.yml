@@ -14,3 +14,4 @@ tin_schema:
         star: star
 
 epsg: 7415
+approximate_tilesize: [1300.0, 1300.0]

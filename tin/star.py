@@ -45,10 +45,24 @@ class Star(object):
             # then skip the triangle and proceed to the next. The skipped
             # triangle will be attached to another star.
             for pt,pid in enumerate(link):
-                if (star > link[pt-1]) or (star > link[pt]):
-                    pass
+                if pt is None or pid is None:
+                    log.error(f"Encountered a None in {star}:{link}")
+                    break
+                if pt:
+                    if (star > link[pt-1]) or (star > link[pt]):
+                        pass
+                    else:
+                        yield (star, link[pt-1], link[pt])
                 else:
-                    yield (star, link[pt-1], link[pt])
+                    pass
+                    # FIXME:   File "/home/balazs/Development/tin/tin/main.py", line 387, in merge_cmd
+                    #     merged.write(outpath, precision=3)
+                    #   File "/home/balazs/Development/tin/tin/formats.py", line 163, in write
+                    #     for tri in self.triangles():
+                    #   File "/home/balazs/Development/tin/tin/star.py", line 48, in triangles
+                    #     if (star > link[pt-1]) or (star > link[pt]):
+                    # TypeError: '>' not supported between instances of 'int' and 'NoneType'
+
 
 
 
@@ -177,7 +191,7 @@ class Star(object):
         log.info("Adding a neighboring TIN to the Stars")
         maxid = max(self.stars)
         candidate_start_id = maxid+1
-        self.points += candidate.points
+        self.points.update(candidate.points)
         stars_nbr = ((candidate_start_id+star, [candidate_start_id+v for v in link])
                      for star, link in candidate.stars.items())
         self.stars.update(stars_nbr)
@@ -207,8 +221,9 @@ class Star(object):
         stars_new = ((start_id + star, [start_id + v for v in link])
                      for star,link in self.stars.items())
         self.stars = dict(stars_new)
+        # FIXME: points should be a dict, not a list
         points_new = ((start_id + i, vtx)
-                      for i, vtx in enumerate(self.points))
+                      for i, vtx in self.points.items())
         self.points = dict(points_new)
 
     def find_duplicate_points(self, candidate: Star, precision: int = 3) -> List[int]:
@@ -324,7 +339,7 @@ class Star(object):
         common_points = []
 
         if candidate is None:
-            for vtx2,pt in enumerate(self.points):
+            for vtx2,pt in self.points.items():
                 pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
                 # if co-located points found
                 if pt_str not in pt_hash_tbl_base:
@@ -367,7 +382,7 @@ class Star(object):
             vid = 0
             new_points = []
             old_new_map = {v:None for v in range(len(self.points))}
-            for vtx, point in enumerate(self.points):
+            for vtx, point in self.points.items():
                 if point is None:
                     old_new_map[vtx] = None
                 else:
@@ -391,7 +406,6 @@ class Star(object):
                 newpts = ((v, pt) for v,pt in enumerate(self.points))
                 self.points = dict(newpts)
                 del newpts
-            log.debug("Modifying base and candidate")
             if not self.stars.keys().isdisjoint(candidate.stars.keys()):
                 raise ValueError(f"Base {self.name} and candidate {candidate.name} cannot have common vertex indices.")
             pt_hash_tbl_candidate = {}
@@ -411,6 +425,9 @@ class Star(object):
                     updated_stars_base.append(star_base)
                     # 1) Overwrite base point with the average z-coordinate.
                     star_candidate = pt_hash_tbl_candidate[pt_str]
+                    _point = candidate.points[star_candidate]
+                    if _point is None:
+                        break
                     candidate_z = candidate.points[star_candidate][2]
                     z_differences.append(abs(pt[2] - candidate_z))
                     # Average z of the co-located points
@@ -607,6 +624,20 @@ class Star(object):
         (3) checks for each triangle that the vertices in adjacent triangles
             are consistent
         """
+        # Check that there are no Null points
+        null_points = [id for id, point in self.points.items()
+                       if point is None]
+        if len(null_points) > 0:
+            log.warning(f"There are {len(null_points)} NULL points. NULL={null_points}")
+        # Check if there is any Null in the links
+        null_in_link_of_star = [star
+                                for star,link in self.stars.items()
+                                for v in link
+                                if v is None]
+        if len(null_in_link_of_star) > 0:
+            log.warning(f"There are NULL in the link of {null_in_link_of_star}. Aborting validation.")
+            return False
+        # Check that links are consistent
         validation_summary = {star:[] for star in self.stars}
         for star, consistent in utils.link_is_consistent(self.stars):
             validation_summary[star].append(consistent)
@@ -614,18 +645,31 @@ class Star(object):
                 log.warning(f"Link of star {star} is not consistent. "
                             f"{self.stars[star]}; "
                             f"{[self.points[v] for v in self.stars[star]]}")
+        # Check if link is CCW
         for star, ccw in utils.link_is_ccw(self.points, self.stars):
             validation_summary[star].append(ccw)
             if not ccw:
                 log.warning(f"Link of star {star} is not CCW. "
                             f"{self.stars[star]}; "
                             f"{[self.points[v] for v in self.stars[star]]}")
-        tris = utils.triangle_is_consistent(self.stars, self.triangles())
-        consistent = all(result[0] for star, result in validation_summary.items())
+        # Check that triangles are consistent
+        _t = []
+        for tri, consistent in utils.triangle_is_consistent(self.stars, self.triangles()):
+            _t.append(consistent)
+            if not consistent:
+                log.warning(f"Triangle {tri} is not consistent")
+
+        no_null = len(null_points) == 0
+        no_null_in_link = len(null_in_link_of_star) == 0
+        links_consistent = all(result[0] for star, result in validation_summary.items())
         ccw = all(result[1] for star, result in validation_summary.items())
-        tris_cons = all(consistent for tri, consistent in tris)
-        # TODO: include tris_cons in return
-        return consistent and ccw
+        tris_consistent = all(_t)
+
+        return no_null and \
+               no_null_in_link and \
+               links_consistent and \
+               ccw and \
+               tris_consistent
 
     def write_star(self, path: Path, mode='a'):
         """Write the Star to a file, conserving its structure.

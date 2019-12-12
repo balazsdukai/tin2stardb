@@ -7,12 +7,14 @@ import pytest
 import csv
 import logging
 from pathlib import Path
+from click.testing import CliRunner
 
+from tin import main
 from tin import formats
 
 log = logging.getLogger(__name__)
 
-@pytest.mark.balazs_local
+# @pytest.mark.balazs_local
 class TestIntegration:
 
     @pytest.fixture(scope='class')
@@ -112,3 +114,23 @@ class TestIntegration:
             pointwriter = csv.writer(fo, delimiter='\t')
             for q in quality:
                 pointwriter.writerow(q)
+
+    def test_merge_densified_5m_stream(self, obj_5m, data_dir):
+        """Merge multiple TINs in a stream in a Morton-order. Densified tile polygons.
+        Buffered point cloud with 200 meters.
+
+        The input tiles have densified vertices on the tile boundary.
+        Densification is done with QGIS with the *Densify by interval*
+        processing toolbox, with an interval parameter of *5* (5m).
+        The point cloud is buffered with 200 meters, so it has a larger extent
+        than the tile.
+        """
+        runner = CliRunner()
+        result = runner.invoke(main.main, [
+            '-vv',
+            str(data_dir / 'tin_config.yml'),
+            'merge',
+            str(data_dir / 'obj' / 'densified_5m'),
+            'all_merge.obj'
+        ])
+        print(result.output)

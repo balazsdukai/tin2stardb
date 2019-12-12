@@ -7,6 +7,7 @@ from pathlib import Path
 from sys import stdout
 import logging
 import json
+import pickle
 
 import yaml
 import click
@@ -267,10 +268,10 @@ def merge_cmd(ctx, directory, outfile, in_memory):
     DIRECTORY.
     """
     log = ctx.obj['log']
-    tin_paths = {} # Will store (morton code : file path)
+    tin_paths = {} # Will store { morton code : (file path, (range)) }
     dirpath = Path(directory).resolve()
     outpath = Path(outfile).resolve()
-    del outfile
+    maxid = 0
 
     if not dirpath.is_dir():
         raise click.exceptions.ClickException(f"{dirpath} is not a directory")
@@ -289,56 +290,164 @@ def merge_cmd(ctx, directory, outfile, in_memory):
             f"You need at least two .obj files in "
             f"{dirpath} in order to merge them")
 
+    # Compute the tilesize. Tiles must be rectangular.
+    # TODO: Compute the tilesize from the data itself. See utils for the draft
+    tilesize = ctx.obj['cfg']['approximate_tilesize']
+    assert isinstance(tilesize[0], float)
+    tin_paths = dict(utils.compute_8neighbors(tin_paths, tilesize))
+
     # write centroids for testing
     log.debug("Writing centroids")
     ctr_path = dirpath / 'centroids.csv'
     with ctr_path.open('w') as cout:
         for i,morton_key in enumerate(sorted(tin_paths)):
-            path = tin_paths[morton_key]
+            path = tin_paths[morton_key][0]
             x,y = utils.rev_morton_code(morton_key)
             cout.write(f"{i}\t{path.name}\t{x}\t{y}\n")
 
     # Loop through the TINs in Morton-order
     morton_order = sorted(tin_paths)
-    base = None
-    for i in range(len(morton_order)):
-        base_key = morton_order[i]
-        try:
-            candidate_key = morton_order[i+1]
-        except IndexError:
-            # Reached the last TIN
-            candidate_key = None
-        base_path = tin_paths[base_key]
-        log.debug(f"Base={base_path.name}")
-        if base is None:
-            base = formats.factory.create('objmem')
+    processed_tiles = set() # Will store {pickle_path, ...}
+    base = formats.factory.create('objmem')
+    candidate = formats.factory.create('objmem')
+    for i,candidate_key in enumerate(morton_order[1:], start=1):
+        # In case of the first two tiles, the candidate is the second tile
+        candidate_path = tin_paths[candidate_key][0]
+        log.debug(f"Candidate={candidate_path.name}")
+
+        if candidate_path.name == '37fz2_1.obj':
+            a=1
+            pass
+
+        # Need to keep track which point belongs to which tile
+        tile_lookup = {}  # Will store { point ID : tile name }
+        # Collect all the base tiles that have been merged
+        if len(processed_tiles) > 0:
+            base_paths = processed_tiles.intersection(tin_paths[candidate_key][1])
+            log.debug(f"Base={','.join(p.name for p in base_paths)}")
+            # FIXME: Why is the Star .points and .stars are not initialized with a dict, but a None?
+            base = formats.factory.create('objmem', points={}, stars={})
+            for tile in base_paths:
+                with tile.open(mode='rb') as fin:
+                    try:
+                        obj = pickle.load(fin, encoding='bytes')
+                        base.points.update(obj.points)
+                        base.stars.update(obj.stars)
+                        tile_lookup.update((pid, obj.name) for pid in base.points)
+                    except pickle.UnpicklingError as e:
+                        log.error(
+                            f"Cannot load pickle {tile}. Error:\n{e}")
+        elif i == 1:
+            # The base is the very first tile
+            base_key = morton_order[0]
+            base_path = tin_paths[base_key][0]
+            log.debug(f"Base={base_path.name}")
             base.read(base_path)
-        if candidate_key:
-            candidate_path = tin_paths[candidate_key]
-            log.debug(f"Candidate={candidate_path.name}")
-            candidate = formats.factory.create('objmem')
-            candidate.read(candidate_path)
+            # FIXME: points need to be dicts
+            _ = {v:point for v,point in enumerate(base.points)}
+            base.points = _
+            # D_base_valid = base.is_valid()
+            # if not D_base_valid:
+            #     log.warning(f"Base is not valid")
+        else:
+            raise click.exceptions.ClickException("Not finding the base tiles")
 
-            if in_memory:
-                base.merge(candidate, strategy='deduplicate', precision=3)
+        candidate.read(candidate_path)
+        # FIXME: points need to be dicts
+        _ = {v: point for v, point in enumerate(candidate.points)}
+        candidate.points = _
+
+        # $ check validity
+        # D_candidate_valid = candidate.is_valid()
+        # if not D_candidate_valid:
+        #     log.warning(f"Candidate is not valid")
+
+        if in_memory:
+            # FIXME: hack because points need to be dicks
+            _m = max(base.stars)
+            if maxid < _m:
+                start_id = _m
+                maxid = _m
             else:
-                start_id = max(base.stars)
-                # Reindex the candidate so that the point indices begin after
-                # the base
-                candidate.reindex(start_id=start_id)
-                # Remove the co-located points from the candidate, merge the
-                # stars of the co-located points and keep these stars only in the
-                # base
-                base.deduplicate(candidate=candidate, precision=3)
+                start_id = maxid
+            # Reindex the candidate so that the point indices begin after
+            # the base
+            candidate.reindex(start_id=start_id)
+            base.merge(candidate, strategy='deduplicate', precision=3)
+        else:
+            _m = max(base.stars)
+            if maxid < _m:
+                start_id = _m
+                maxid = _m
+            else:
+                start_id = maxid
+            # Reindex the candidate so that the point indices begin after
+            # the base
+            candidate.reindex(start_id=start_id)
+            # Remove the co-located points from the candidate, merge the
+            # stars of the co-located points and keep these stars only in the
+            # base
+            base.deduplicate(candidate=candidate, precision=3)
 
-        if not in_memory:
-            # We only write out the base
-            base.pickle_star((dirpath / base.name).with_suffix('.pickle'))
-            base.write_star(outpath, mode='a')
-            # The candidate becomes the base
-            base = candidate
+            # Pickle 'em for later...
+            # would be cleaner to swap the if-else but i want the first tile
+            # to be written first to the file
+
+            if i == 1:
+                pickle_path = base_path.with_suffix('.pickle')
+                base.pickle_star(pickle_path)
+                processed_tiles.update([pickle_path, ])
+
+                pickle_path = candidate_path.with_suffix('.pickle')
+                candidate.pickle_star(pickle_path)
+                processed_tiles.update([pickle_path, ])
+            else:
+                pickle_path = candidate_path.with_suffix('.pickle')
+                candidate.pickle_star(pickle_path)
+                processed_tiles.update([pickle_path, ])
+
+                # Need to split the base to tiles again, because it was updated
+                # by the deduplicate
+                tile_class = {
+                    tile.stem: formats.OBJMem(
+                    points={},
+                    stars={},
+                    name=tile.stem
+                ) for tile in base_paths}
+                for pid,tile in tile_lookup.items():
+                    # $$$
+                    if tile is None:
+                        log.error("tile is None")
+                    # $$$
+                    if pid is not None:
+                        tile_class[tile].points[pid] = base.points[pid]
+                        tile_class[tile].stars[pid] = base.stars[pid]
+                    else:
+                        log.error("pid is None")
+                for tile,star_obj in tile_class.items():
+                    pickle_path = (dirpath / star_obj.name).with_suffix('.pickle')
+                    if len(star_obj.points) != 0:
+                        star_obj.pickle_star(pickle_path)
+                del tile_class, tile_lookup, star_obj, obj
+            # TODO: also need to update the base pickles somehow
+
     if in_memory:
         base.write(outpath)
+    else:
+        del base, candidate
+        merged = formats.factory.create('objmem', points={}, stars={})
+        for tile in processed_tiles:
+            with tile.open('rb') as fin:
+                tin = pickle.load(fin, encoding='bytes')
+                merged.points.update(tin.points)
+                merged.stars.update(tin.stars)
+        merged.is_valid()
+        merged.write(outpath, precision=3)
+        for tile in processed_tiles:
+            # Delete the pickle
+            tile.unlink()
+
+
 
 
 main.add_command(import_cmd)

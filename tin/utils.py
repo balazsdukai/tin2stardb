@@ -10,6 +10,7 @@ import logging
 MODULE_MATPLOTLIB_AVAILABLE = True
 try:
     import matplotlib.pyplot as plt
+    import matplotlib.lines as lines
 except ImportError as e:
     MODULE_MATPLOTLIB_AVAILABLE = False
 
@@ -46,33 +47,24 @@ def link_is_consistent(stars) -> Generator:
         yield star, all(star in stars[_star] for _star in link)
 
 
-def _triangle_is_consistent(stars) -> Generator:
-    """Check that each adjacent triangle's vertices are consistent in it's star
-    with the current one."""
-    def _tris_consistent(stars, star, link):
-        for pt, pid in enumerate(link):
-            tri = (star, link[pt - 1], link[pt])
-            link_neighbor = stars[tri[1]]
-            _si = link_neighbor.index(star)
-            if _si:
-                yield link_neighbor[_si-1] == tri[2]
-            else:
-                yield False
-    for star, link in stars.items():
-       yield star, all(_tris_consistent(stars, star, link))
-
 def triangle_is_consistent(stars, triangles) -> Generator:
     """Check that each adjacent triangle's vertices are consistent in it's star
     with the current one."""
-    def stars_are_consistent(tri, stars):
+    def __stars_are_consistent(tri, stars):
         for i, star in enumerate(tri):
             link = stars[star]
             try:
-                yield link.index(tri[i-2])+1 == link.index(tri[i-1])
+                # star is vertex 1 (v1) of the triangle (tri)
+                idx_v2 = link.index(tri[i-2])
+                idx_v3 = link.index(tri[i-1])
+                _idx_v3 = idx_v2+1  if idx_v2+1 < len(link) else 0
+                if _idx_v3 !=idx_v3:
+                    pass
+                yield _idx_v3 == idx_v3
             except ValueError:
                 yield False
     for tri in triangles:
-        yield tri, all(stars_are_consistent(tri, stars))
+        yield tri, all(__stars_are_consistent(tri, stars))
 
 
 def distance(a,b) -> float:
@@ -252,9 +244,8 @@ def mean_coordinate(points: Iterable[Tuple]) -> Tuple[float, float]:
     mean_y = mean(pt[1] for pt in points)
     return mean_x, mean_y
 
-"""
-Computing Morton-code. Reference: https://github.com/trevorprater/pymorton
-"""
+# Computing Morton-code. Reference: https://github.com/trevorprater/pymorton ---
+
 def __part1by1_64(n):
     """64-bit mask"""
     n &= 0x00000000ffffffff                  # binary: 11111111111111111111111111111111,                                len: 32
@@ -304,7 +295,49 @@ def morton_code(x: float, y: float):
     """
     return interleave(int(x * 100), int(y * 100))
 
+
 def rev_morton_code(morton_key: int) -> Tuple[float, float]:
     """Get the coordinates from a Morton-key"""
     x,y = deinterleave(morton_key)
     return float(x)/100.0, float(y)/100.0
+
+
+# Compute tile range -----------------------------------------------------------
+def tilesize(tin_paths) -> Tuple[float, float]:
+    """Compute the tile size from Morton-codes for the input TINs.
+
+    .. note:: Assumes regular grid.
+
+    :returns: The x- and y-dimensions of a tile
+    """
+    centroids = []
+    for i, morton_code in enumerate(tin_paths):
+        if i == 2:
+            break
+        else:
+            centroids.append(rev_morton_code(morton_code))
+    return abs(centroids[0][0] - centroids[1][0]), abs(centroids[0][1] - centroids[1][1])
+
+
+def __in_bbox__(point, range):
+    """Check if a point is within a BBOX."""
+
+
+def compute_8neighbors(tin_paths: Mapping, tilesize: Tuple) -> Generator:
+    """Computes the 8 neighbors for the tiles, using a predefined search range."""
+    for mc, filepath in tin_paths.items():
+        center = rev_morton_code(mc)
+        neighbours = set()
+        # Search range
+        minx = center[0] - tilesize[0]
+        miny = center[1] - tilesize[1]
+        maxx = center[0] + tilesize[0]
+        maxy = center[1] + tilesize[1]
+        for mc_nbr, filepath_nbr in tin_paths.items():
+            if mc_nbr != mc:
+                center_nbr = rev_morton_code(mc_nbr)
+                within = ((minx < center_nbr[0] < maxx) and
+                          (miny < center_nbr[1] < maxy))
+                if within:
+                    neighbours.update([filepath_nbr.with_suffix('.pickle'),])
+        yield mc, (filepath, neighbours)

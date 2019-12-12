@@ -2,6 +2,7 @@
 
 """Tests the star module."""
 
+import pytest
 import logging
 from math import isclose
 from statistics import mean
@@ -117,10 +118,13 @@ class TestStar:
                 pointwriter.writerow(p)
         assert obj.is_valid()
 
-    def test_is_valid(self, obj_base):
-        infile = obj_base / '37fz2_9.obj'
+    def test_is_valid(self, obj_5m):
+        infile = obj_5m / '37fz2_9.obj'
         obj = formats.OBJMem()
         obj.read(infile)
+        # FIXME: points are dicts
+        pts = {v:point for v,point in enumerate(obj.points)}
+        obj.points = pts
         assert obj.is_valid()
 
     def test_find_duplicate_points(self, obj_5m):

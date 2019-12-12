@@ -5,6 +5,7 @@
 
 import pytest
 import logging
+from pathlib import Path
 
 from tin import utils, formats
 
@@ -31,6 +32,17 @@ class TestBBOX:
 
 
 class TestCCW:
+    # FIXME: vertices will become dict instead of list
+
+    @pytest.fixture(scope='class')
+    def obj(self, obj_base):
+        infile = obj_base / '37fz2_9.obj'
+        obj = formats.OBJMem()
+        obj.read(infile)
+        pts = {v:point for v,point in enumerate(obj.points)}
+        obj.points = pts
+        yield obj
+
     def test_sort_ccw(self, obj_base):
         infile = obj_base / '37fz2_9.obj'
         obj = formats.OBJMem()
@@ -51,26 +63,18 @@ class TestCCW:
             # check for duplicates in the star
             assert len(star) == len(set(star))
 
-    def test_link_is_ccw(self, obj_base):
-        infile = obj_base / '37fz2_9.obj'
-        obj = formats.OBJMem()
-        obj.read(infile)
+    def test_link_is_ccw(self, obj):
         res = utils.link_is_ccw(obj.points, obj.stars)
         assert all(ccw for vid, ccw in res)
 
-    def test_link_is_consistent(self, obj_base):
-        infile = obj_base / '37fz2_9.obj'
-        obj = formats.OBJMem()
-        obj.read(infile)
+    def test_link_is_consistent(self, obj):
         res = utils.link_is_consistent(obj.stars)
         assert all(consistent for vid, consistent in res)
 
-    def test_triangle_is_consistent(self, obj_base):
-        infile = obj_base / '37fz2_9.obj'
-        obj = formats.OBJMem()
-        obj.read(infile)
+    def test_triangle_is_consistent(self, obj):
         res = utils.triangle_is_consistent(obj.stars, obj.triangles())
         assert all(consistent for tri, consistent in res)
+
 
 class TestSide:
     @pytest.mark.parametrize('poly, result', [
@@ -108,3 +112,29 @@ class TestSorting:
         point_res = utils.rev_morton_code(morton_key)
         assert pytest.approx(point[0], point_res[0]) and \
                pytest.approx(point[1], point_res[1])
+
+class TestRange:
+    def test_tilesize(self, obj_5m):
+        tin_paths = {}
+        for child in obj_5m.iterdir():
+            if child.suffix == '.obj':
+                vertices = formats.OBJ.parse_vertices(child)
+                log.debug(f"Computing TIN centroids and Morton-key")
+                center = utils.mean_coordinate(vertices)
+                morton_key = utils.morton_code(*center)
+                tin_paths[morton_key] = child
+        cellsize = utils.tilesize(tin_paths)
+
+    def test_compute_8neighbors(self, obj_5m):
+        tin_paths = {}
+        for child in obj_5m.iterdir():
+            if child.suffix == '.obj':
+                vertices = formats.OBJ.parse_vertices(child)
+                log.debug(f"Computing TIN centroids and Morton-key")
+                center = utils.mean_coordinate(vertices)
+                morton_key = utils.morton_code(*center)
+                tin_paths[morton_key] = child
+        tin_paths = dict(utils.compute_8neighbors(tin_paths, (1300.0, 1300.0)))
+        expectation_for_37fz2_6 = {'37fz2_1', '37fz2_7', '37fz2_2','37fz2_11', '37fz2_12'}
+        _37fz2_6 = [p[1] for p in tin_paths.values() if p[0] == Path('/home/balazs/Development/tin/tests/data/obj/densified_5m/37fz2_6.obj')][0]
+        assert _37fz2_6 == expectation_for_37fz2_6

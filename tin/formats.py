@@ -142,21 +142,33 @@ class OBJMem(OBJ, Star):
         self.stars = dict(utils.sort_ccw(self.points, adjacency_table))
         self.name = path.stem
 
-    def write(self, path: Path) -> None:
+    def write(self, path: Path, precision: int = 3) -> None:
         """Write to Wavefront OBJ.
 
         :param path: :py:class:Path to the output file
         """
         with path.open(mode='w') as fo:
-            log.info(f"Writing {path}")
+            log.info(f"Writing OBJ to {path}, precision={precision}")
             fo.write('# Converted from Star TIN structure to OBJ.\n')
             fo.write('# Tool written by Balázs Dukai, b.dukai@tudelft.nl\n')
-            for point in self.points:
-                fo.write('v %s %s %s\n' % point)
+            # FIXME: points need to be dict only
+            if isinstance(self.points, list):
+                for point in self.points:
+                    fo.write('v %s %s %s\n' % point)
+            elif isinstance(self.points, dict):
+                for pid in sorted(self.points):
+                    point = self.points[pid]
+                    fo.write(f"v "
+                             f"{point[0]:.{precision}f} "
+                             f"{point[1]:.{precision}f} "
+                             f"{point[2]:.{precision}f}\n")
             for tri in self.triangles():
                 # Star uses a 0-based index
                 _tri = [t+1 for t in tri]
-                fo.write(f"f {_tri[0]} {_tri[1]} {_tri[2]}\n")
+                fo.write(f"f "
+                         f"{_tri[0]} "
+                         f"{_tri[1]} "
+                         f"{_tri[2]}\n")
 
 
 class OBJDb(OBJ, StarDb):
