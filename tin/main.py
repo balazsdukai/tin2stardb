@@ -108,7 +108,12 @@ def import_cmd(ctx, filename, bbox, bboxes):
                                            f" to import. Please use only "
                                            f"a single format in a directory.")
             suffix = suffixes.pop()
-            fmt = suffix.lower().split('.')[1]
+            f = suffix.lower().split('.')[1]
+            if f == 'obj':
+                # FIXME: needs objdb
+                fmt = 'objdb'
+            else:
+                raise click.exceptions.BadParameter(f"Unsupported format {f}")
             formatter = formats.factory.create(fmt, conn=conn,
                                                schema=tin_schema)
             geojson = json.load(bboxes) if bboxes else None
@@ -446,6 +451,124 @@ def merge_cmd(ctx, directory, outfile, in_memory):
         for tile in processed_tiles:
             # Delete the pickle
             tile.unlink()
+
+
+@click.command('import_many')
+@click.argument('directory', type=click.Path(exists=True))
+@click.pass_context
+def import_many_cmd(ctx, directory, outfile):
+    """Import TINs in OBJ format to PostgreSQL
+
+    DIRECTORY is the folder that contains the TINs to be merged. All .obj files
+    in this folder are merged together into a single file.
+    """
+    log = ctx.obj['log']
+    tin_paths = {} # Will store { morton code : (file path, (range)) }
+    dirpath = Path(directory).resolve()
+    maxid = 0
+
+    if not dirpath.is_dir():
+        raise click.exceptions.ClickException(f"{dirpath} is not a directory")
+    for child in dirpath.iterdir():
+        if child.suffix == '.obj':
+            vertices = formats.OBJ.parse_vertices(child)
+            log.debug(f"Computing TIN centroids and Morton-key")
+            center = utils.mean_coordinate(vertices)
+            morton_key = utils.morton_code(*center)
+            tin_paths[morton_key] = Path(child)
+    del vertices
+    if len(tin_paths) > 1:
+        click.echo(f"Found {len(tin_paths)} .obj files in {directory}")
+    else:
+        raise click.exceptions.ClickException(
+            f"You need at least two .obj files in "
+            f"{dirpath} in order to merge them")
+
+    # Compute the tilesize. Tiles must be rectangular.
+    # TODO: Compute the tilesize from the data itself. See utils for the draft
+    tilesize = ctx.obj['cfg']['approximate_tilesize']
+    assert isinstance(tilesize[0], float)
+    tin_paths = dict(utils.compute_8neighbors(tin_paths, tilesize))
+
+    # write centroids for testing
+    log.debug("Writing centroids")
+    ctr_path = dirpath / 'centroids.csv'
+    with ctr_path.open('w') as cout:
+        for i,morton_key in enumerate(sorted(tin_paths)):
+            path = tin_paths[morton_key][0]
+            x,y = utils.rev_morton_code(morton_key)
+            cout.write(f"{i}\t{path.name}\t{x}\t{y}\n")
+
+    # Loop through the TINs in Morton-order
+    morton_order = sorted(tin_paths)
+    processed_tiles = set() # Will store {pickle_path, ...}
+    base = formats.factory.create('objmem')
+    candidate = formats.factory.create('objmem')
+    for i,candidate_key in enumerate(morton_order[1:], start=1):
+        # In case of the first two tiles, the candidate is the second tile
+        candidate_path = tin_paths[candidate_key][0]
+        log.debug(f"Candidate={candidate_path.name}")
+
+        if candidate_path.name == '37fz2_1.obj':
+            a=1
+            pass
+
+        # Need to keep track which point belongs to which tile
+        tile_lookup = {}  # Will store { point ID : tile name }
+        # Collect all the base tiles that have been merged
+        if len(processed_tiles) > 0:
+            base_paths = processed_tiles.intersection(tin_paths[candidate_key][1])
+            log.debug(f"Base={','.join(p.name for p in base_paths)}")
+            # FIXME: Why is the Star .points and .stars are not initialized with a dict, but a None?
+            base = formats.factory.create('objmem', points={}, stars={})
+            for tile in base_paths:
+                with tile.open(mode='rb') as fin:
+                    try:
+                        obj = pickle.load(fin, encoding='bytes')
+                        base.points.update(obj.points)
+                        base.stars.update(obj.stars)
+                        tile_lookup.update((pid, obj.name) for pid in base.points)
+                    except pickle.UnpicklingError as e:
+                        log.error(
+                            f"Cannot load pickle {tile}. Error:\n{e}")
+        elif i == 1:
+            # The base is the very first tile
+            base_key = morton_order[0]
+            base_path = tin_paths[base_key][0]
+            log.debug(f"Base={base_path.name}")
+            base.read(base_path)
+            # FIXME: points need to be dicts
+            _ = {v:point for v,point in enumerate(base.points)}
+            base.points = _
+            # D_base_valid = base.is_valid()
+            # if not D_base_valid:
+            #     log.warning(f"Base is not valid")
+        else:
+            raise click.exceptions.ClickException("Not finding the base tiles")
+
+        candidate.read(candidate_path)
+        # FIXME: points need to be dicts
+        _ = {v: point for v, point in enumerate(candidate.points)}
+        candidate.points = _
+
+        # $ check validity
+        # D_candidate_valid = candidate.is_valid()
+        # if not D_candidate_valid:
+        #     log.warning(f"Candidate is not valid")
+
+        _m = max(base.stars)
+        if maxid < _m:
+            start_id = _m
+            maxid = _m
+        else:
+            start_id = maxid
+        # Reindex the candidate so that the point indices begin after
+        # the base
+        candidate.reindex(start_id=start_id)
+        # Remove the co-located points from the candidate, merge the
+        # stars of the co-located points and keep these stars only in the
+        # base
+        base.deduplicate(candidate=candidate, precision=3)
 
 
 

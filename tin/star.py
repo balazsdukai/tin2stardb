@@ -557,6 +557,281 @@ class Star(object):
             return None, None
 
 
+    def remove_duplicate_pts(self, candidate: Star = None, precision: int = 3, return_quality: bool = False) -> Tuple:
+        """Remove duplicate points from a TIN.
+
+        The general method for removing duplicates:
+
+            1) Cast vertices into strings using the given precision
+            2) Create hash-table (dict) and keep track of the vertex indices,
+                not loosing the duplicates
+            3) If two points are co-located, take their mean z coordinate as
+                the new z
+            4) Replace the duplicate with the original vertex
+
+        If `candidate` is not provided, the function modifies the Star in place
+        by combining the links of the stars where the star-points are
+        co-located. This usually happens when you are merging two adjacent TINs
+        into a single TIN.
+
+        If `candidate` is provided, the function modifies both the Star
+        instance on which this method is called (the *base*) and the Star
+        instance that has co-located points with the base (the *candidate*).
+        The principle for this operation is to remove the duplicated points
+        from the candidate and add them to the base, while updating the stars
+        in both base and candidate.
+
+        Two stars are combined by adding the link from the candidate to the link
+        of the base, thus the star of the base becomes the only
+        star for co-located points. Then the combined link is sorted in CCW, since we still have
+        all the vertices in memory and all the vertex indices are valid in
+        both the base and candidate. Finally the co-located points are removed
+        from the candidate, the vertex indices are updated, the stars are removed
+        and the candidate links are updated to include the stars from the candidate.
+
+        .. note:: Ignores the z coordinate for determining point co-location.
+
+        .. warning:: The function requires that there are no common vertex
+            indices in `base` and `candidate`, thus it is necessary to reindex
+            the `candidate` beforehand.
+
+        .. warning:: This operation modifies the TIN.
+
+        :return: Tuple of None if return_quality is False; Else a tuple of:
+            1) The list of co-located points on the boundary of the two TINs.
+                The returned points are tuples of (x,y,z). The z coordinate is
+                the average of the z coordinates of the co-located points.
+            2) A tuple of (Minimum, Maximum, Mean, Variance) of the absolute
+                differences of the z coordinates of the co-located points.
+        """
+        # base : the Star instance on which this method is called
+        # candidate : the Star instance that shares some co-located points with
+        # the base (adjacent to the base)
+        log.info(f"Removing duplicate points from the TIN. "
+                 f"Precision is set to {precision} decimal digits")
+        pt_hash_tbl_base = {}
+        z_differences = []
+        common_points = []
+
+        if candidate is None:
+            for vtx2,pt in self.points.items():
+                pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
+                # if co-located points found
+                if pt_str not in pt_hash_tbl_base:
+                    pt_hash_tbl_base[pt_str] = vtx2
+                else:
+                    vtx1 = pt_hash_tbl_base[pt_str]
+                    _z = self.points[vtx1][2]
+                    z_differences.append(abs(pt[2] - _z))
+                    # average z in case of co-located points
+                    new_z = (pt[2] + _z) / 2
+                    # keep the point that was found first and replace it's z-coordinate
+                    new_pt = (self.points[vtx1][0], self.points[vtx1][1], new_z)
+                    common_points.append(new_pt)
+                    self.points[vtx1] = new_pt
+                    del _z, new_pt, new_z
+                    # go through the stars and replace the references of vtx2 to
+                    # vtx1 in the links
+                    for star in self.stars[vtx2]:
+                        try:
+                            i = self.stars[star].index(vtx2)
+                            self.stars[star][i] = vtx1
+                        except ValueError:
+                            log.error(f"Expected to find vertex {vtx2} in the stars "
+                                      f"of {vtx2}:{self.stars[vtx2]}")
+                    # add the link of vtx2 to the star of vtx1
+                    link_vtx1 = self.stars[vtx1]
+                    link_vtx1.extend(v for v in self.stars[vtx2]
+                                     if v not in link_vtx1)
+                    # sort the link ccw
+                    _d = dict(utils.sort_ccw(self.points, {vtx1: link_vtx1}))
+                    # update the link of vtx1 with the merged link of vtx1+vtx2
+                    self.stars[vtx1] = _d[vtx1]
+                    # delete vtx2 star and point
+                    self.points[vtx2] = None
+                    del self.stars[vtx2]
+                    del _d
+            del pt_hash_tbl_base
+            # Create a new points list, excluding the deleted points and create a
+            # mapping of the old-new vertices
+            vid = 0
+            new_points = []
+            old_new_map = {v:None for v in range(len(self.points))}
+            for vtx, point in self.points.items():
+                if point is None:
+                    old_new_map[vtx] = None
+                else:
+                    old_new_map[vtx] = vid
+                    new_points.append(point)
+                    vid += 1
+            # Reindex the stars with the new vertices
+            new_stars = {}
+            for old_v, new_v in old_new_map.items():
+                if new_v is not None:
+                    old_link = self.stars[old_v]
+                    new_stars[new_v] = [old_new_map[v] for v in old_link
+                                        if old_new_map[v] is not None]
+            # Replace the points and stars
+            self.points = deepcopy(new_points)
+            self.stars = deepcopy(new_stars)
+        else:
+            # FIXME: this code below expects that Star.points is a dict, not a list
+            # so for now we need to check and cast the Star.points
+            if isinstance(self.points, list):
+                newpts = ((v, pt) for v,pt in enumerate(self.points))
+                self.points = dict(newpts)
+                del newpts
+            if not self.stars.keys().isdisjoint(candidate.stars.keys()):
+                raise ValueError(f"Base {self.name} and candidate {candidate.name} cannot have common vertex indices.")
+            pt_hash_tbl_candidate = {}
+            updated_stars_base = []
+
+            for vtx, pt in candidate.points.items():
+                pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
+                pt_hash_tbl_candidate[pt_str] = vtx
+            del vtx, pt
+
+            for star_base, pt in self.points.items():
+                pt_str = f"{pt[0]:.{precision}f},{pt[1]:.{precision}f}"
+                if pt_str not in pt_hash_tbl_candidate:
+                    pt_hash_tbl_base[pt_str] = star_base
+                else:
+                    # Co-located point in base and candidate.
+                    updated_stars_base.append(star_base)
+                    # 1) Overwrite base point with the average z-coordinate.
+                    star_candidate = pt_hash_tbl_candidate[pt_str]
+                    _point = candidate.points[star_candidate]
+                    if _point is None:
+                        break
+                    candidate_z = candidate.points[star_candidate][2]
+                    z_differences.append(abs(pt[2] - candidate_z))
+                    # Average z of the co-located points
+                    new_z = (pt[2] + candidate_z) / 2
+                    # Keep the point of the base and replace it's z-coordinate
+                    new_pt = (self.points[star_base][0],
+                              self.points[star_base][1],
+                              new_z)
+                    common_points.append(new_pt)
+                    self.points[star_base] = new_pt
+                    del candidate_z, new_pt, new_z
+
+                    # 2) Take the link of the candidate and merge into the link
+                    # of the base, while updating the references in the
+                    # link of the candidate star to point to star_base.
+                    #
+                    # Replace star_candidate to star_base in each link in
+                    # candidate that contains star_candidate
+                    for star in candidate.stars[star_candidate]:
+                        # At this point the link of the candidate already
+                        # contains indices from the base
+                        if star in candidate.stars:
+                            try:
+                                i = candidate.stars[star].index(star_candidate)
+                                candidate.stars[star][i] = star_base
+                            except ValueError:
+                                log.error(f"Expected to find point {star_candidate} in "
+                                          f"the link of {star_candidate}:{candidate.stars[star_candidate]}")
+                    # Append the link of star_candidate to the link of star_base
+                    link_base = self.stars[star_base]
+                    link_base.extend(v for v in candidate.stars[star_candidate]
+                                     if v not in link_base)
+                    # Combine the points from the base and candidate into one
+                    # container. But at this point we already merged the links,
+                    # so we need to check if the link contains indices from the
+                    # other Star.
+                    combined_points = {v: self.points[v]
+                                       for v in self.stars[star_base]
+                                       if v in self.points}
+                    combined_points[star_base] = self.points[star_base]
+                    for v in candidate.stars[star_candidate]:
+                        if v in candidate.points:
+                            combined_points[v] = candidate.points[v]
+                    combined_points[star_candidate] = candidate.points[star_candidate]
+                    # FIXME: This is a quickfix for
+                    #  7751d13f1d6171d6a79e22fe7eded06176e491d6 so that the
+                    #  process runs through. Encountered a reference in a link
+                    #  to a missing point (58233) in tile 37fz2_13 when merging
+                    #  with 37fz2_12. The missing point is part of 37fz2_7,
+                    #  but this tile is not in memory.
+                    try:
+                        # Sort the link ccw
+                        _d = dict(utils.sort_ccw(combined_points, {star_base: link_base}))
+                        # Update the link of star_base with the merged link of base+candidate
+                        self.stars[star_base] = _d[star_base]
+                        del _d
+                    except KeyError:
+                        log.error("Encountered missing point in sort_ccw()")
+                        self.stars[star_base] = link_base
+                    # Delete candidate star and point
+                    candidate.points[star_candidate] = None
+                    del candidate.stars[star_candidate]
+
+            if len(updated_stars_base) == 0:
+                log.warning(f"Did not find any co-located points in base {self.name} and candidate {candidate.name}")
+                return None, None
+
+            del star_base, pt, star_candidate, pt_hash_tbl_candidate, pt_hash_tbl_base
+            # Create a new points list, excluding the deleted points and create a
+            # mapping of the old-new vertices
+            vid = max(self.points) + 1 # start at where base ends
+            new_points = {}
+            old_new_map = {v:None for v in candidate.points}
+            old_new_map.update((v,v) for v in self.points)
+            for vtx, point in candidate.points.items():
+                if point is None:
+                    old_new_map[vtx] = None
+                else:
+                    old_new_map[vtx] = vid
+                    new_points[vid] = point
+                    vid += 1
+            del vtx, point
+            # Reindex the candidate stars with the new vertices
+            new_stars = {}
+            for old_vtx, new_vtx in old_new_map.items():
+                if new_vtx is not None and old_vtx in candidate.stars:
+                    old_link = candidate.stars[old_vtx]
+                    new_stars[new_vtx] = [old_new_map[v] for v in old_link
+                                          if old_new_map[v] is not None]
+            # Replace the points and stars
+            candidate.points = deepcopy(new_points)
+            candidate.stars = deepcopy(new_stars)
+            del new_points, new_stars, old_vtx, new_vtx
+            # Also need to update the links of the base that include points
+            # from the candidate
+            for star_base in updated_stars_base:
+                for vtx in self.stars[star_base]:
+                    if vtx in old_new_map:
+                        # Found a vertex from the candidate
+                        try:
+                            i = self.stars[star_base].index(vtx)
+                            self.stars[star_base][i] = old_new_map[vtx]
+                        except ValueError:
+                            pass
+        del old_new_map
+        # TODO: need to update the global max_id
+
+        if len(z_differences) < 2:
+            return_quality = False
+            log.warning("Only 1 co-located point were found. Cannot compute merge quality")
+        else:
+            # Compute the quality of the TIN merge
+            min_z = round(min(z_differences), 3)
+            max_z = round(max(z_differences), 3)
+            mean_z = round(mean(z_differences), 3)
+            variance_z = round(variance(z_differences), 3)
+            log.info(
+                f"Difference in z coordinates of co-located points in the two TINs: "
+                f"nr_points={len(z_differences)} "
+                f"min={min_z}, "
+                f"max={max_z}, "
+                f"mean={mean_z}, "
+                f"variance={variance_z}")
+        if return_quality:
+            return common_points, (min_z, max_z, mean_z, variance_z)
+        else:
+            return None, None
+
+
     def streaming_deduplicate(self):
         """ """
 
