@@ -10,11 +10,11 @@ psycopg2 = "*"
 pyyaml = "*"
 startin = "*"
 matplotlib = "*"
-tin = {editable = true,path = "."}
 fiona = "*"
 shapely = "*"
 pytest = "*"
 click = "*"
+tin = {path = "."}
 
 [requires]
-python_version = "3.7"
+python_version = "3.8"

@@ -117,7 +117,8 @@ def import_cmd(ctx, filename, bbox, bboxes):
             formatter = formats.factory.create(fmt, conn=conn,
                                                schema=tin_schema)
             geojson = json.load(bboxes) if bboxes else None
-            for file_path in files:
+            total = len(files)
+            for i,file_path in enumerate(files):
                 tile = file_path.stem
                 if geojson:
                     polygon = [utils.get_polygon(f) for f in geojson['features']
@@ -133,6 +134,7 @@ def import_cmd(ctx, filename, bbox, bboxes):
                     else:
                         bbox = utils.bbox(polygon[0])
                 formatter.insert(file_path, ctx.obj['cfg']['epsg'], bbox=bbox)
+                log.info(f"[{i+1}/{total}] Imported {tile}")
             formatter.create_index()
         else:
             raise FileNotFoundError(path)
